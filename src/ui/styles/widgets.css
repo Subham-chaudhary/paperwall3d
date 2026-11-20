@@ -1,0 +1,476 @@
+/* Blender-style widgets: number fields, sliders, checkboxes, enums, segmented rows, color, buttons, text. */
+
+/* ───────── Property layout ───────── */
+.pw-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pw-row {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+  min-width: 0;
+}
+.pw-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Aligned rows: widgets are joined, only the outer corners are rounded. */
+.pw-row.aligned {
+  gap: 1px;
+}
+.pw-row.aligned > .pw-num,
+.pw-row.aligned > .pw-btn,
+.pw-row.aligned > .pw-enum,
+.pw-row.aligned > .pw-seg {
+  border-radius: 0;
+}
+.pw-row.aligned > :first-child {
+  border-top-left-radius: var(--radius);
+  border-bottom-left-radius: var(--radius);
+}
+.pw-row.aligned > :last-child {
+  border-top-right-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+.pw-split {
+  display: grid;
+  gap: 4px;
+}
+
+.pw-prop {
+  display: grid;
+  grid-template-columns: minmax(70px, 38%) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  min-height: 22px;
+  padding: 0 0 0 0;
+}
+.pw-prop-label {
+  text-align: right;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pw-prop-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pw-prop.info .pw-prop-value {
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+.pw-info-text {
+  user-select: text;
+}
+.pw-prop.inactive .pw-prop-label,
+.pw-col.inactive > .pw-prop .pw-prop-label {
+  color: var(--text-disabled);
+}
+.pw-col.inactive .pw-num,
+.pw-col.inactive .pw-enum,
+.pw-col.inactive .pw-seg-btn,
+.pw-col.inactive .pw-color,
+.pw-col.inactive .pw-check {
+  opacity: 0.5;
+}
+.pw-prop.filtered-out {
+  display: none;
+}
+
+/* ───────── Number field / slider ───────── */
+.pw-num {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--field-h);
+  padding: 0 6px;
+  background: var(--bg-widget);
+  border-radius: var(--radius);
+  color: var(--text);
+  overflow: hidden;
+  cursor: ew-resize;
+  min-width: 0;
+  outline-offset: -1px;
+  touch-action: none;
+}
+.pw-num:hover {
+  background: var(--bg-widget-hover);
+}
+.pw-num.slider {
+  background: var(--bg-field);
+  box-shadow: var(--inner-shadow);
+}
+.pw-num.slider:hover {
+  background: var(--bg-field-hover);
+}
+.pw-num-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  border-radius: var(--radius) 0 0 var(--radius);
+  pointer-events: none;
+}
+.pw-num.slider:hover .pw-num-fill {
+  background: var(--accent-hover);
+}
+.pw-num-label,
+.pw-num-spacer {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.pw-num-spacer {
+  flex: 1 1 0;
+}
+.pw-num:not(.has-label) .pw-num-label {
+  flex: 1 1 0;
+}
+.pw-num-value {
+  position: relative;
+  flex: none;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.pw-num-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.18);
+  cursor: default;
+}
+.pw-num-arrow.left {
+  left: 0;
+}
+.pw-num-arrow.right {
+  right: 0;
+}
+.pw-num:not(.slider):not(.editing):not(.dragging):hover .pw-num-arrow {
+  display: flex;
+}
+.pw-num-arrow:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+.pw-num.dragging {
+  background: var(--bg-field);
+  cursor: ew-resize;
+}
+.pw-num.editing {
+  cursor: text;
+  background: var(--bg-field);
+}
+.pw-num.editing .pw-num-value,
+.pw-num.editing .pw-num-label,
+.pw-num.editing .pw-num-arrow {
+  visibility: hidden;
+}
+.pw-num-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: none;
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  background: #1a1a1a;
+  color: #fff;
+  text-align: center;
+  padding: 0 6px;
+  border-radius: var(--radius);
+}
+
+/* ───────── Checkbox ───────── */
+.pw-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--field-h);
+  color: var(--text);
+  cursor: default;
+  align-self: flex-start;
+  min-width: 0;
+}
+.pw-check-box {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--bg-widget);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.pw-check:hover .pw-check-box {
+  background: var(--bg-widget-hover);
+}
+.pw-check.on .pw-check-box {
+  background: var(--accent);
+  color: #fff;
+}
+.pw-check.on:hover .pw-check-box {
+  background: var(--accent-hover);
+}
+.pw-check-label:empty {
+  display: none;
+}
+.pw-panel-header .pw-check {
+  align-self: center;
+}
+
+/* ───────── Enum dropdown ───────── */
+.pw-enum {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: var(--field-h);
+  padding: 0 4px 0 8px;
+  background: var(--bg-widget);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: default;
+  min-width: 0;
+}
+.pw-enum:hover {
+  background: var(--bg-widget-hover);
+}
+.pw-enum.menu-open {
+  background: var(--bg-widget-active);
+}
+.pw-enum-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pw-enum-icon {
+  display: inline-flex;
+}
+.pw-enum-arrow {
+  color: var(--text-dim);
+  display: inline-flex;
+}
+.pw-enum.flat {
+  width: auto;
+  background: transparent;
+  height: 20px;
+  padding: 0 4px 0 6px;
+}
+.pw-enum.flat:hover {
+  background: #565656;
+}
+.pw-enum.flat.menu-open {
+  background: var(--accent);
+}
+
+/* ───────── Segmented ───────── */
+.pw-seg {
+  display: flex;
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+}
+.pw-seg-btn {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: var(--field-h);
+  padding: 0 6px;
+  background: var(--bg-widget);
+  color: var(--text);
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pw-seg-btn:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+.pw-seg-btn:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.pw-seg-btn:only-child {
+  border-radius: var(--radius);
+}
+.pw-seg-btn:hover {
+  background: var(--bg-widget-hover);
+}
+.pw-seg-btn.active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.pw-seg-btn.icon-only {
+  flex: none;
+  width: 26px;
+  padding: 0;
+}
+
+/* ───────── Color swatch ───────── */
+.pw-color {
+  --swatch: #888;
+  position: relative;
+  height: var(--field-h);
+  border-radius: var(--radius);
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: default;
+  color: #fff;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+}
+.pw-color.light {
+  color: #111;
+  text-shadow: none;
+}
+.pw-color:hover {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+.pw-color-hex {
+  font-size: var(--fs-small);
+  font-family: ui-monospace, Consolas, monospace;
+  pointer-events: none;
+}
+.pw-color-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: default;
+  border: 0;
+  padding: 0;
+}
+
+/* ───────── Buttons ───────── */
+.pw-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--field-h);
+  padding: 0 10px;
+  background: var(--bg-widget);
+  border-radius: var(--radius);
+  color: var(--text);
+  white-space: nowrap;
+  cursor: default;
+  min-width: 0;
+}
+.pw-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pw-btn:hover {
+  background: var(--bg-widget-hover);
+}
+.pw-btn:active {
+  background: var(--accent);
+}
+.pw-btn.primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.pw-btn.primary:hover {
+  background: var(--accent-hover);
+}
+.pw-btn.danger:hover {
+  background: #8a3b3b;
+}
+.pw-btn.icon-only {
+  flex: none;
+  width: 24px;
+  padding: 0;
+}
+.pw-btn[disabled] {
+  color: var(--text-disabled);
+  background: #3a3a3a;
+  pointer-events: none;
+}
+.pw-prop-field > .pw-btn {
+  width: 100%;
+}
+
+/* ───────── Text field ───────── */
+.pw-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--field-h);
+  padding: 0 6px;
+  background: var(--bg-field);
+  border-radius: var(--radius);
+  box-shadow: var(--inner-shadow);
+  color: var(--text-dim);
+  min-width: 0;
+}
+.pw-text:focus-within {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: #1a1a1a;
+}
+.pw-text-input {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  user-select: text;
+}
+
+/* ───────── Icon toggle (eye etc.) ───────── */
+.pw-icon-toggle {
+  all: unset;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: default;
+}
+.pw-icon-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+.pw-icon-toggle.on {
+  color: var(--text);
+}
+.pw-icon-toggle.pw-hdr-toggle.on {
+  background: var(--accent);
+  color: #fff;
+}
