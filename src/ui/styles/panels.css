@@ -1,0 +1,336 @@
+/* Properties editor, panels, outliner, image strip. */
+
+/* ───────── Properties ───────── */
+.pw-props-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pw-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+.pw-crumb-tab {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pw-tabcol {
+  flex: none;
+  width: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 3px;
+  background: var(--bg-region-dark);
+  border-right: 1px solid var(--sep);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.pw-tabbtn {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: default;
+}
+.pw-tabbtn:hover {
+  background: #444;
+  color: var(--text);
+}
+.pw-tabbtn.active {
+  background: var(--bg-region);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--accent-orange);
+}
+.pw-props-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 6px 12px 4px;
+}
+.pw-tab-page {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pw-tab-page[hidden] {
+  display: none;
+}
+
+/* ───────── Panels ───────── */
+.pw-panel {
+  background: var(--bg-sub);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.pw-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px 0 4px;
+  background: var(--bg-panel-header);
+  border-radius: 5px;
+  cursor: default;
+  min-width: 0;
+}
+.pw-panel-header:hover {
+  background: #464646;
+}
+.pw-panel-arrow {
+  display: inline-flex;
+  color: var(--text-dim);
+}
+.pw-panel-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pw-panel-header-widget {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+}
+.pw-panel-grip {
+  margin-left: auto;
+  color: #6a6a6a;
+  display: inline-flex;
+}
+.pw-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px 8px 6px;
+}
+.pw-panel.collapsed .pw-panel-body {
+  display: none;
+}
+.pw-panel.collapsed .pw-panel-header {
+  background: var(--bg-panel-header);
+}
+.pw-tab-page.searching .pw-panel.collapsed .pw-panel-body {
+  display: flex;
+}
+.pw-panel.filtered-out {
+  display: none;
+}
+
+.pw-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pw-model {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  grid-template-areas: 'dot name size' 'dot state state';
+  column-gap: 6px;
+  align-items: center;
+  padding: 3px 4px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius);
+}
+.pw-model-dot {
+  grid-area: dot;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6a6a6a;
+}
+.pw-model.cached .pw-model-dot {
+  background: var(--success);
+}
+.pw-model-name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pw-model-size {
+  grid-area: size;
+  color: var(--text-dim);
+}
+.pw-model-state {
+  grid-area: state;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+}
+
+/* ───────── Outliner ───────── */
+.pw-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 3px 0;
+  background: var(--bg-region-dark);
+}
+.pw-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px 0 4px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.pw-tree-row.child {
+  padding-left: 22px;
+}
+.pw-tree-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.pw-tree-row.selected {
+  background: rgba(71, 114, 179, 0.55);
+}
+.pw-tree-row.selected .pw-tree-icon {
+  color: var(--accent-orange);
+}
+.pw-tree-row.dim {
+  opacity: 0.5;
+}
+.pw-tree-row.filtered-out {
+  display: none;
+}
+.pw-tree.collapsed .pw-tree-row.child {
+  display: none;
+}
+.pw-tree-expander {
+  width: 12px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--text-dim);
+}
+.pw-tree-icon {
+  display: inline-flex;
+  color: var(--text-dim);
+}
+.pw-tree-label {
+  flex: none;
+}
+.pw-tree-suffix {
+  color: var(--text-dim);
+  flex: 1;
+}
+.pw-tree-label + .pw-eye,
+.pw-tree-suffix + .pw-eye {
+  margin-left: auto;
+}
+.pw-tree-row.scene .pw-tree-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.pw-tree-row .pw-eye {
+  margin-left: auto;
+}
+.pw-tree-row .pw-tree-suffix ~ .pw-eye {
+  margin-left: 0;
+}
+
+/* ───────── Image strip ───────── */
+.pw-strip-header {
+  cursor: default;
+}
+.pw-strip-header:hover {
+  background: #444;
+}
+.pw-strip-toggle {
+  display: inline-flex;
+  color: var(--text-dim);
+}
+.pw-strip-sub {
+  color: var(--text-dim);
+  margin-left: 4px;
+}
+.pw-strip-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--bg-region-dark);
+  position: relative;
+}
+.pw-app.strip-collapsed .pw-strip-body {
+  display: none;
+}
+.pw-thumb {
+  all: unset;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 90px;
+  max-width: 280px;
+  background: var(--bg-region);
+  border: 1px solid var(--sep);
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: default;
+  opacity: 0.35;
+  pointer-events: none;
+}
+.pw-strip-body.has-scene .pw-thumb {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pw-strip-body.has-scene .pw-thumb:hover {
+  border-color: var(--accent);
+}
+.pw-thumb-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  padding: 0 6px;
+  background: var(--bg-header);
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+.pw-thumb-img {
+  flex: 1;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #1d1d1d;
+  min-width: 0;
+}
+.pw-thumb-img canvas {
+  display: block;
+  max-height: 100%;
+  max-width: 100%;
+  height: calc(var(--strip-h) - 24px - 18px - 14px);
+  width: auto;
+  object-fit: contain;
+}
+.pw-strip-empty {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.pw-strip-body:not(.has-scene) .pw-strip-empty {
+  display: flex;
+}
