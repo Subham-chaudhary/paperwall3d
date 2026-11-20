@@ -1,0 +1,377 @@
+/* Area layout: top bar, toolbar, viewport, strip, outliner, properties, status bar, splitters. */
+.pw-app {
+  --right-w: 340px;
+  --outliner-h: 230px;
+  --strip-h: 170px;
+  display: grid;
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr) var(--status-h);
+  height: 100%;
+  background: var(--bg-app);
+}
+
+.pw-main {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.pw-center {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pw-viewport-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+.pw-viewport-area > .pw-area {
+  flex: 1;
+}
+.pw-strip-area {
+  flex: none;
+  height: var(--strip-h);
+  min-height: 0;
+  display: flex;
+}
+.pw-strip-area > .pw-area {
+  flex: 1;
+}
+.pw-app.strip-collapsed .pw-strip-area {
+  height: var(--header-h);
+}
+.pw-app.strip-collapsed .pw-split-strip {
+  display: none;
+}
+
+.pw-right {
+  flex: none;
+  width: var(--right-w);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-region);
+}
+.pw-outliner-area {
+  flex: none;
+  height: var(--outliner-h);
+  min-height: 0;
+  display: flex;
+}
+.pw-properties-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+.pw-outliner-area > .pw-area,
+.pw-properties-area > .pw-area {
+  flex: 1;
+}
+
+/* Generic area: header + body */
+.pw-area {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-region);
+  overflow: hidden;
+}
+.pw-area-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--header-h);
+  padding: 0 4px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--sep);
+  min-width: 0;
+}
+.pw-editor-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  height: 20px;
+  border-radius: var(--radius);
+  background: #2b2b2b;
+  color: var(--text);
+  white-space: nowrap;
+}
+.pw-header-spacer {
+  flex: 1 1 auto;
+}
+.pw-header-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--bg-field);
+  border-radius: 10px;
+  box-shadow: var(--inner-shadow);
+  color: var(--text-dim);
+  min-width: 0;
+  flex: 0 1 130px;
+}
+.pw-search-input {
+  all: unset;
+  min-width: 0;
+  width: 100%;
+  color: var(--text);
+  user-select: text;
+}
+.pw-search-input::placeholder {
+  color: var(--text-disabled);
+}
+
+/* Splitters */
+.pw-splitter {
+  flex: none;
+  background: var(--sep);
+  position: relative;
+  z-index: 5;
+}
+.pw-splitter.col {
+  width: 4px;
+  cursor: col-resize;
+}
+.pw-splitter.row {
+  height: 4px;
+  cursor: row-resize;
+}
+.pw-splitter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  transition: background 0.1s;
+}
+.pw-splitter.col::after {
+  left: -2px;
+  right: -2px;
+}
+.pw-splitter.row::after {
+  top: -2px;
+  bottom: -2px;
+}
+.pw-splitter:hover::after,
+.pw-splitter.dragging::after {
+  background: rgba(71, 114, 179, 0.55);
+}
+
+/* Toolbar */
+.pw-toolbar {
+  flex: none;
+  width: var(--toolbar-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  background: var(--bg-region);
+  border-right: 1px solid var(--sep);
+}
+.pw-tool {
+  all: unset;
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: default;
+}
+.pw-tool:hover {
+  background: var(--bg-widget);
+}
+.pw-tool.active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.pw-tool.disabled {
+  color: var(--text-disabled);
+}
+.pw-tool.disabled:hover {
+  background: transparent;
+}
+.pw-toolbar-sep {
+  width: 22px;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--sep);
+}
+
+/* Top bar */
+.pw-topbar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  height: var(--topbar-h);
+  padding: 0 6px 0 4px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--sep);
+  min-width: 0;
+  overflow: hidden;
+}
+.pw-logo-btn,
+.pw-menubtn,
+.pw-topbtn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  color: var(--text);
+  white-space: nowrap;
+  cursor: default;
+}
+.pw-logo-btn {
+  padding: 0 6px;
+  margin-right: 2px;
+}
+.pw-menubtn:hover,
+.pw-menubtn.menu-open,
+.pw-topbtn:hover,
+.pw-logo-btn:hover {
+  background: #565656;
+}
+.pw-menubtn.menu-open {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.pw-topbtn {
+  padding: 0 5px;
+}
+.pw-topbtn[disabled] {
+  color: var(--text-disabled);
+  pointer-events: none;
+}
+.pw-topbtn.drawer-toggle {
+  display: none;
+}
+.pw-topbar-spacer {
+  flex: 1 1 auto;
+}
+
+/* Workspace tabs */
+.pw-ws-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: 14px;
+  align-self: flex-end;
+  height: 24px;
+}
+.pw-ws-tab {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 22px;
+  align-self: flex-end;
+  border-radius: 5px 5px 0 0;
+  background: #2b2b2b;
+  color: var(--text-dim);
+  border: 1px solid var(--sep);
+  border-bottom: none;
+  cursor: default;
+  white-space: nowrap;
+}
+.pw-ws-tab:hover {
+  background: #444;
+  color: var(--text);
+}
+.pw-ws-tab.active {
+  background: var(--bg-region);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.pw-scene-name {
+  width: 150px;
+  margin-left: 4px;
+  flex: 0 1 150px;
+}
+
+/* Fullscreen preview: only the viewport remains. */
+.pw-app.fullscreen {
+  grid-template-rows: 0 minmax(0, 1fr) 0;
+}
+.pw-app.fullscreen .pw-topbar,
+.pw-app.fullscreen .pw-statusbar,
+.pw-app.fullscreen .pw-toolbar,
+.pw-app.fullscreen .pw-right,
+.pw-app.fullscreen .pw-split-right,
+.pw-app.fullscreen .pw-split-strip,
+.pw-app.fullscreen .pw-strip-area,
+.pw-app.fullscreen .pw-vp-header,
+.pw-app.fullscreen .pw-vp-overlay {
+  display: none !important;
+}
+
+/* Narrow screens: the right column becomes a toggleable drawer. */
+@media (max-width: 900px) {
+  .pw-topbtn.drawer-toggle {
+    display: inline-flex;
+  }
+  .pw-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(92vw, var(--right-w)) !important;
+    z-index: 60;
+    transform: translateX(100%);
+    transition: transform 0.18s ease;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
+  }
+  .pw-app.drawer-open .pw-right {
+    transform: none;
+  }
+  .pw-split-right {
+    display: none;
+  }
+  .pw-drawer-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 55;
+    background: rgba(0, 0, 0, 0.4);
+    display: none;
+  }
+  .pw-app.drawer-open .pw-drawer-scrim {
+    display: block;
+  }
+  .pw-ws-tabs {
+    overflow-x: auto;
+    margin-left: 6px;
+  }
+  .pw-topbar .pw-scene-name {
+    display: none;
+  }
+  .pw-menubtn {
+    padding: 0 6px;
+  }
+  .pw-status-hints {
+    display: none !important;
+  }
+}
+@media (max-width: 620px) {
+  .pw-ws-tabs {
+    display: none;
+  }
+  .pw-status-right .pw-status-item:not(.version) {
+    display: none;
+  }
+}
+.pw-drawer-scrim {
+  display: none;
+}

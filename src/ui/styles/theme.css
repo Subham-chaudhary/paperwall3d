@@ -1,0 +1,202 @@
+/* Blender 4.x default dark theme tokens and global resets. */
+:root {
+  --bg-app: #232323;
+  --bg-region: #303030;
+  --bg-region-dark: #282828;
+  --bg-header: #3d3d3d;
+  --bg-header-dim: #333333;
+  --bg-panel-header: #3d3d3d;
+  --bg-sub: #2a2a2a;
+  --bg-field: #282828;
+  --bg-field-hover: #303030;
+  --bg-widget: #545454;
+  --bg-widget-hover: #656565;
+  --bg-widget-active: #4772b3;
+  --bg-menu: #181818;
+  --bg-viewport: #1d1d1d;
+
+  --text: #e6e6e6;
+  --text-dim: #a0a0a0;
+  --text-disabled: #6b6b6b;
+  --text-on-accent: #ffffff;
+
+  --accent: #4772b3;
+  --accent-hover: #5680c2;
+  --accent-dark: #2f4f80;
+  --accent-orange: #ffa033;
+
+  --sep: #1a1a1a;
+  --outline: #3a3a3a;
+  --radius: 4px;
+  --radius-sm: 3px;
+
+  --axis-x: #ff3352;
+  --axis-y: #8bdc00;
+  --axis-z: #2f84ff;
+
+  --info: #7fb0ff;
+  --success: #6fcf6f;
+  --warning: #ffa033;
+  --error: #ff5a5a;
+
+  --font: 'Inter', 'DejaVu Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fs: 12px;
+  --fs-small: 11px;
+
+  --topbar-h: 28px;
+  --status-h: 22px;
+  --toolbar-w: 38px;
+  --header-h: 24px;
+  --field-h: 20px;
+
+  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.6);
+  --inner-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-app);
+  color: var(--text);
+  font: var(--fs) / 1.3 var(--font);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: default;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+input[type='text'],
+input[type='search'] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+#app {
+  height: 100%;
+}
+
+.pw-fatal {
+  padding: 32px;
+  color: var(--error);
+}
+
+/* Thin Blender-like scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4a4a transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5d5d5d;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* Icons */
+.pw-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  line-height: 0;
+}
+.pw-icon-svg {
+  display: block;
+}
+
+.pw-note {
+  margin: 4px 8px;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  user-select: text;
+}
+.pw-spacer {
+  height: 6px;
+}
+
+body.pw-resizing-col,
+body.pw-resizing-col * {
+  cursor: col-resize !important;
+}
+body.pw-resizing-row,
+body.pw-resizing-row * {
+  cursor: row-resize !important;
+}
+
+/* Tooltips (Blender style) */
+.pw-tooltip {
+  position: fixed;
+  z-index: 5000;
+  max-width: 320px;
+  padding: 6px 8px;
+  background: #151515;
+  border: 1px solid #000;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs);
+  pointer-events: none;
+}
+.pw-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.pw-tooltip-desc {
+  color: var(--text);
+}
+.pw-tooltip-extra {
+  margin-top: 3px;
+  color: var(--text-dim);
+}
+.pw-tooltip-path {
+  margin-top: 5px;
+  color: #8fa8d4;
+  font-family: ui-monospace, 'DejaVu Sans Mono', Consolas, monospace;
+  font-size: var(--fs-small);
+}
