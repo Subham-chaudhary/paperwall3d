@@ -23,10 +23,14 @@ const LAYERS_DOLLY = 0.5;
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), hi);
 
-/** Distance at which a plane of height 2 and width 2*imageAspect covers a viewport of the given aspect. */
+/**
+ * Distance at which a plane of height 2 and width 2*imageAspect covers (fills, no bars) a viewport
+ * of the given aspect. Visible height is 2·D·tan(fov/2) and visible width is that times viewAspect;
+ * both must not exceed the plane, hence D = min(1, imageAspect/viewAspect) / tan(fov/2).
+ */
 export function fitDistance(fovDeg: number, viewAspect: number, imageAspect: number): number {
   const t = Math.tan((fovDeg * DEG) / 2);
-  return Math.max(1, imageAspect / Math.max(viewAspect, 1e-3)) / t;
+  return Math.min(1, imageAspect / Math.max(viewAspect, 1e-3)) / t;
 }
 
 export class CameraRig {
