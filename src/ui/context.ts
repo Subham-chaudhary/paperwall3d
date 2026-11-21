@@ -29,11 +29,6 @@ export interface AppEvents extends Record<string, unknown> {
   recents: void;
 }
 
-/** Optional renderer extension: per-layer visibility. UI feature-detects it. */
-export interface LayerVisibilityRenderer extends IRenderer {
-  setLayerVisibility?(layer: 'background' | 'foreground', visible: boolean): void;
-}
-
 export interface AppContext {
   readonly store: SettingsStore;
   readonly ui: UIState;

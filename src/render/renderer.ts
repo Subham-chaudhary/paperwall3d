@@ -33,6 +33,7 @@ export class PaperRenderer implements IRenderer {
   private readonly resizeObserver: ResizeObserver;
 
   private layers: SceneLayers | null = null;
+  private readonly layerVisible = { background: true, foreground: true };
   private settings: Settings = cloneSettings(DEFAULT_SETTINGS);
   private width = 1;
   private height = 1;
@@ -95,6 +96,7 @@ export class PaperRenderer implements IRenderer {
     this.disposeLayers();
     const layers = new SceneLayers(scene, this.shared, this.renderer.capabilities.getMaxAnisotropy());
     this.layers = layers;
+    this.applyLayerVisibility();
     this.scene.add(layers.group);
     this.rig.setImageAspect(layers.aspect);
     this.rig.setSettings(this.settings.camera);
@@ -122,6 +124,18 @@ export class PaperRenderer implements IRenderer {
   resetView(): void {
     this.rig.reset();
     this.dirty = true;
+  }
+
+  setLayerVisibility(layer: 'background' | 'foreground', visible: boolean): void {
+    this.layerVisible[layer] = visible;
+    this.applyLayerVisibility();
+    this.dirty = true;
+  }
+
+  private applyLayerVisibility(): void {
+    if (!this.layers) return;
+    this.layers.background.object.visible = this.layerVisible.background;
+    if (this.layers.foreground) this.layers.foreground.object.visible = this.layerVisible.foreground;
   }
 
   getStats(): RenderStats {

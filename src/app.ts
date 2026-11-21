@@ -42,7 +42,7 @@ import {
   updateProjectSettings,
   type ProjectSummary,
 } from './persistence/projects';
-import type { AppContext, AppEvents, LayerVisibilityRenderer } from './ui/context';
+import type { AppContext, AppEvents } from './ui/context';
 import { downloadBlob, stripExtension } from './ui/dom';
 import { OperatorRegistry, registerOperators } from './ui/operators';
 import { errorMessage, Reports } from './ui/reports';
@@ -412,8 +412,7 @@ export class App implements AppContext {
       case 'background':
       case 'foreground': {
         this.ui.setLayerVisible(layer, visible);
-        const r = this.renderer as LayerVisibilityRenderer | null;
-        r?.setLayerVisibility?.(layer, visible);
+        this.renderer?.setLayerVisibility(layer, visible);
         break;
       }
       default:

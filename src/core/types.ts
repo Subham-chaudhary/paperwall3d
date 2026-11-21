@@ -263,6 +263,8 @@ export interface IRenderer {
   setPointer(x: number, y: number): void;
   resize(width: number, height: number): void;
   resetView(): void;
+  /** Show/hide one mesh layer. Persists across setScene() calls. */
+  setLayerVisibility(layer: 'background' | 'foreground', visible: boolean): void;
   getStats(): RenderStats;
   exportGLB(): Promise<Blob>;
   /** Render a still at the given size (defaults to source aspect at 1920 long edge). */
