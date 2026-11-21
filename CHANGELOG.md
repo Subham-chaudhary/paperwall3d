@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-11-21
+
+### Added
+- Outliner eye toggles now show and hide the Background and Foreground meshes in the viewport.
+- The renderer uses the pipeline's full-resolution background depth (subject region filled from its surroundings) for the background mesh, instead of recomputing a coarser one.
+
 ## [1.0.1] - 2026-11-21
 
 ### Fixed
