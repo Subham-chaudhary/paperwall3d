@@ -36,7 +36,9 @@ export class SceneLayers {
 
     this.bgTexture = imageDataTexture(scene.background, maxAnisotropy, true);
     // The background must not inherit the subject's depth: fill the masked region from its surroundings.
-    const bgDepth = scene.hasForeground ? fillBackgroundDepth(scene.depth, scene.mask, scene.width, scene.height) : scene.depth;
+    const bgDepth = !scene.hasForeground
+      ? scene.depth
+      : (scene.backgroundDepth ?? fillBackgroundDepth(scene.depth, scene.mask, scene.width, scene.height));
     this.bgDepthTex = depthTexture(bgDepth, scene.width, scene.height);
 
     const centroid = maskCentroid(scene.mask, scene.width, scene.height, this.aspect);

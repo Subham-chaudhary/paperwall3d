@@ -178,6 +178,8 @@ export interface PreparedScene {
   mask: Float32Array;
   /** Refined depth, 0..1 (1 = near). */
   depth: Float32Array;
+  /** Depth with the foreground region filled from its surroundings (for the background mesh). Optional. */
+  backgroundDepth?: Float32Array;
   /** Background layer with the foreground removed and the hole filled. Alpha = 255. */
   background: ImageData;
   /** Foreground layer: source colors (edge-bled) with alpha = mask. */
