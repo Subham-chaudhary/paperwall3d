@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-11-21
+
+### Fixed
+- The camera now covers the viewport instead of fitting the image inside it. Wide viewports no longer show empty bars beside the wallpaper.
+
 ## [1.0.0] - 2026-11-21
 
 ### Added
