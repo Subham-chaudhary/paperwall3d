@@ -1,0 +1,179 @@
+/* Status bar: hints, progress, reports, backend/version. */
+.pw-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--status-h);
+  padding: 0 8px;
+  background: var(--bg-header-dim);
+  border-top: 1px solid var(--sep);
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  min-width: 0;
+  overflow: hidden;
+}
+.pw-status-hints {
+  flex: 0 1 auto;
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.pw-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pw-status-center {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.pw-status-right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.pw-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.pw-status-item.version {
+  color: var(--text);
+}
+
+/* Progress (Blender-style rounded bar with cancel) */
+.pw-progress {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: min(460px, 100%);
+}
+.pw-progress-bar {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  border-radius: 8px;
+  background: #1a1a1a;
+  box-shadow: var(--inner-shadow);
+  overflow: hidden;
+  min-width: 0;
+}
+.pw-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--accent);
+  border-radius: 8px;
+  transition: width 0.15s ease;
+}
+.pw-progress.error .pw-progress-fill {
+  background: #a33;
+}
+.pw-progress.indeterminate .pw-progress-fill {
+  animation: pw-indeterminate 1.2s ease-in-out infinite;
+  transition: none;
+}
+@keyframes pw-indeterminate {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+.pw-progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+.pw-progress-cancel {
+  all: unset;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text-dim);
+  cursor: default;
+}
+.pw-progress-cancel:hover {
+  background: #a33;
+  color: #fff;
+}
+
+/* Reports */
+.pw-report {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0 8px;
+  height: 18px;
+  border-radius: 9px;
+  color: var(--text);
+  cursor: default;
+  min-width: 0;
+}
+.pw-report:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.pw-report-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pw-report.info .pw-report-icon,
+.pw-report-line.info .pw-icon {
+  color: var(--info);
+}
+.pw-report.success .pw-report-icon,
+.pw-report-line.success .pw-icon {
+  color: var(--success);
+}
+.pw-report.warning .pw-report-icon,
+.pw-report-line.warning .pw-icon {
+  color: var(--warning);
+}
+.pw-report.error .pw-report-icon,
+.pw-report-line.error .pw-icon {
+  color: var(--error);
+}
+.pw-report.error {
+  color: #ffb3b3;
+}
+.pw-report-icon {
+  display: inline-flex;
+}
+.pw-report-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  user-select: text;
+}
+.pw-report-line:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.pw-report-time {
+  color: var(--text-dim);
+  flex: none;
+}
