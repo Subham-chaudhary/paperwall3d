@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-11-22
+
+### Added
+- **WebGL context fallback:** the viewport no longer fails to start on GPUs and drivers that reject some WebGL context settings. This was seen in Firefox on Windows as `FEATURE_FAILURE_EGL_NO_CONFIG`. WebGL2 creation now falls back from antialiasing plus high-performance GPU through progressively simpler settings. The live HTML wallpaper uses the same fallback.
+- **WebGL fix-it guidance:** if WebGL2 really is unavailable, the viewport explains how to fix it (turn on hardware acceleration in Firefox, Chrome or Edge, or update the driver), and the status bar points there. Previously it failed silently.
+
 ## [2.0.1] - 2026-11-22
 
 ### Fixed
