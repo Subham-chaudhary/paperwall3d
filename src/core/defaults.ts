@@ -62,7 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
     mode: 'render',
     showGrid: false,
     showStats: false,
-    background: '#1d1d1d',
+    background: '#0b0a12',
   },
   runtime: {
     backend: 'auto',

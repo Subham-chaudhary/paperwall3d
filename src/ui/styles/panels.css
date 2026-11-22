@@ -46,13 +46,13 @@
   cursor: default;
 }
 .pw-tabbtn:hover {
-  background: #444;
+  background: var(--bg-widget);
   color: var(--text);
 }
 .pw-tabbtn.active {
   background: var(--bg-region);
   color: var(--text);
-  box-shadow: inset 2px 0 0 var(--accent-orange);
+  box-shadow: inset 2px 0 0 var(--accent2);
 }
 .pw-props-scroll {
   flex: 1;
@@ -88,7 +88,7 @@
   min-width: 0;
 }
 .pw-panel-header:hover {
-  background: #464646;
+  background: var(--bg-panel-header-hover);
 }
 .pw-panel-arrow {
   display: inline-flex;
@@ -107,7 +107,7 @@
 }
 .pw-panel-grip {
   margin-left: auto;
-  color: #6a6a6a;
+  color: var(--text-disabled);
   display: inline-flex;
 }
 .pw-panel-body {
@@ -141,7 +141,7 @@
   column-gap: 6px;
   align-items: center;
   padding: 3px 4px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--bg-inset);
   border-radius: var(--radius);
 }
 .pw-model-dot {
@@ -149,7 +149,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #6a6a6a;
+  background: var(--text-disabled);
 }
 .pw-model.cached .pw-model-dot {
   background: var(--success);
@@ -191,13 +191,17 @@
   padding-left: 22px;
 }
 .pw-tree-row:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-hover-soft);
 }
 .pw-tree-row.selected {
-  background: rgba(71, 114, 179, 0.55);
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent2);
 }
 .pw-tree-row.selected .pw-tree-icon {
-  color: var(--accent-orange);
+  color: var(--accent2-bright);
+}
+.pw-tree-row.selected .pw-tree-label {
+  color: var(--accent2-text);
 }
 .pw-tree-row.dim {
   opacity: 0.5;
@@ -247,7 +251,7 @@
   cursor: default;
 }
 .pw-strip-header:hover {
-  background: #444;
+  background: var(--bg-panel-header-hover);
 }
 .pw-strip-toggle {
   display: inline-flex;
@@ -311,7 +315,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #1d1d1d;
+  background-color: var(--bg-viewport);
   min-width: 0;
 }
 .pw-thumb-img canvas {
@@ -333,4 +337,7 @@
 }
 .pw-strip-body:not(.has-scene) .pw-strip-empty {
   display: flex;
+}
+.pw-strip-body:not(.has-scene) .pw-thumb {
+  visibility: hidden;
 }

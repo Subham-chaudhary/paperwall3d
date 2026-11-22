@@ -156,7 +156,7 @@
   align-items: center;
   justify-content: center;
   color: var(--text-dim);
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--bg-inset);
   cursor: default;
 }
 .pw-num-arrow.left {
@@ -169,8 +169,8 @@
   display: flex;
 }
 .pw-num-arrow:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-on-accent);
+  background: var(--bg-hover-mid);
 }
 .pw-num.dragging {
   background: var(--bg-field);
@@ -192,8 +192,8 @@
   border: none;
   outline: 1px solid var(--accent);
   outline-offset: -1px;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--bg-field-focus);
+  color: var(--text);
   text-align: center;
   padding: 0 6px;
   border-radius: var(--radius);
@@ -220,14 +220,14 @@
   align-items: center;
   justify-content: center;
   color: transparent;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px var(--sep);
 }
 .pw-check:hover .pw-check-box {
   background: var(--bg-widget-hover);
 }
 .pw-check.on .pw-check-box {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .pw-check.on:hover .pw-check-box {
   background: var(--accent-hover);
@@ -282,7 +282,7 @@
   padding: 0 4px 0 6px;
 }
 .pw-enum.flat:hover {
-  background: #565656;
+  background: var(--bg-chip-hover);
 }
 .pw-enum.flat.menu-open {
   background: var(--accent);
@@ -342,21 +342,21 @@
   height: var(--field-h);
   border-radius: var(--radius);
   background: var(--swatch);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(7, 6, 12, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   cursor: default;
-  color: #fff;
+  color: var(--text-on-accent);
   text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
 }
 .pw-color.light {
-  color: #111;
+  color: var(--text-on-light);
   text-shadow: none;
 }
 .pw-color:hover {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(236, 235, 245, 0.55);
 }
 .pw-color-hex {
   font-size: var(--fs-small);
@@ -409,7 +409,7 @@
   background: var(--accent-hover);
 }
 .pw-btn.danger:hover {
-  background: #8a3b3b;
+  background: var(--error-bg);
 }
 .pw-btn.icon-only {
   flex: none;
@@ -418,7 +418,7 @@
 }
 .pw-btn[disabled] {
   color: var(--text-disabled);
-  background: #3a3a3a;
+  background: var(--bg-header);
   pointer-events: none;
 }
 .pw-prop-field > .pw-btn {
@@ -440,7 +440,7 @@
 }
 .pw-text:focus-within {
   box-shadow: inset 0 0 0 1px var(--accent);
-  background: #1a1a1a;
+  background: var(--bg-field-focus);
 }
 .pw-text-input {
   all: unset;
@@ -464,7 +464,7 @@
   cursor: default;
 }
 .pw-icon-toggle:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--bg-hover-mid);
   color: var(--text);
 }
 .pw-icon-toggle.on {
@@ -472,5 +472,5 @@
 }
 .pw-icon-toggle.pw-hdr-toggle.on {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }

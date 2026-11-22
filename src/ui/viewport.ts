@@ -165,7 +165,7 @@ export function createViewport(ctx: AppContext): ViewportParts {
           parts.push({ z: pz - 0.01, svg: `<line x1="40" y1="40" x2="${sx.toFixed(1)}" y2="${sy.toFixed(1)}" stroke="${a.c}" stroke-width="2"/>` });
           parts.push({
             z: pz,
-            svg: `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="7.5" fill="${a.c}"/><text x="${sx.toFixed(1)}" y="${(sy + 3.6).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="#1a1a1a">${a.l}</text>`,
+            svg: `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="7.5" fill="${a.c}"/><text x="${sx.toFixed(1)}" y="${(sy + 3.6).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="#0d0c14">${a.l}</text>`,
           });
         } else {
           parts.push({
