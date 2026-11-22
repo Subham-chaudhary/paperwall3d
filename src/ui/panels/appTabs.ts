@@ -1,11 +1,9 @@
-/** Properties tabs backed by application state (image info, wallpaper/export, system). */
+/** Properties tabs backed by application state (image info, system). Settings fields live in the Scene tab categories. */
 import type { ModelCacheEntry } from '../../core/types';
 import { formatBytes, h } from '../dom';
 import type { AppContext } from '../context';
-import { userPrefs } from '../userprefs';
-import { button, checkbox } from '../widgets/controls';
+import { button } from '../widgets/controls';
 import { column, infoRow, propRow, spacedRow } from '../widgets/layout';
-import type { Fields } from './fields';
 import { panel } from './panel';
 import { page } from './settingsTabs';
 
@@ -22,7 +20,7 @@ function dynRow(label: string, text: () => string, updaters: (() => void)[]): HT
 
 const dims = (w: number, hh: number): string => `${w} × ${hh} px`;
 
-export function imageTab(ctx: AppContext, f: Fields): HTMLElement {
+export function imageTab(ctx: AppContext): HTMLElement {
   const upd: (() => void)[] = [];
   const refresh = (): void => upd.forEach((u) => u());
   ctx.events.on('image', refresh);
@@ -40,7 +38,7 @@ export function imageTab(ctx: AppContext, f: Fields): HTMLElement {
       button({ label: 'Re-analyze', icon: 'refresh', onClick: () => ctx.ops.run('image.reanalyze'), tip: { desc: 'Run the object-mask and depth models again on the current image.', extra: 'Shift R' } }).el,
     ),
   );
-  const info = column(
+  const analysis = column(
     dynRow('AI backend', () => ctx.raw?.backendUsed.toUpperCase() ?? '—', upd),
     dynRow('Mask model', () => ctx.raw?.segmentationModel ?? (ctx.raw ? 'off' : '—'), upd),
     dynRow('Depth model', () => ctx.raw?.depthModel ?? '—', upd),
@@ -65,40 +63,11 @@ export function imageTab(ctx: AppContext, f: Fields): HTMLElement {
   );
   return page(
     panel({ id: 'img.source', title: 'Source Image' }, source),
-    panel({ id: 'img.processing', title: 'Processing' }, ...f.rows('runtime.workingResolution', 'runtime.backend'), info),
+    panel({ id: 'img.analysis', title: 'Last Analysis' }, analysis),
   );
 }
 
-export function wallpaperTab(ctx: AppContext, f: Fields): HTMLElement {
-  const full = (label: string, ic: Parameters<typeof button>[0]['icon'], op: string, desc: string, extra?: string, primary = false): HTMLElement =>
-    propRow(null, button({ label, icon: ic, variant: primary ? 'primary' : 'default', onClick: () => ctx.ops.run(op), tip: { desc, extra } }).el);
-  return page(
-    panel(
-      { id: 'wp.preview', title: 'Wallpaper Preview' },
-      ...f.rows('wallpaper.aspect', 'wallpaper.overlay'),
-      full('Preview Wallpaper', 'fullscreen', 'view.preview_wallpaper', 'Full-window preview of the wallpaper in a desktop frame. Every export goes through it.', 'Ctrl Shift P'),
-    ),
-    panel(
-      { id: 'wp.export', title: 'Export' },
-      full('Live Wallpaper (.html)', 'sparkle', 'file.export_html', 'Self-contained web wallpaper for Wallpaper Engine / Lively / any browser (opens the wallpaper preview first).'),
-      full('Export GLB', 'cube', 'file.export_glb', 'Export the layered meshes as a binary glTF (opens the wallpaper preview first).', 'Ctrl E'),
-      full('Render PNG', 'aperture', 'render.image', 'Render a PNG still at the wallpaper frame aspect (opens the wallpaper preview first).', 'F12'),
-      full('Export config.json', 'file', 'file.export_config_json', 'Save a plain 2.5dwallpp-compatible config.json.'),
-      full('Export .pw3d.json', 'export', 'file.export_config', 'Save a reusable PaperWall3D wallpaper config.', 'Ctrl Shift S'),
-      propRow(
-        null,
-        checkbox({
-          bind: userPrefs.binding('embedAssets'),
-          label: 'Embed Assets',
-          tip: { desc: 'Embed the source image, mask and depth maps in the .pw3d.json as data URLs so it opens without running AI.' },
-        }).el,
-      ),
-    ),
-    panel({ id: 'wp.viewport', title: 'Viewport' }, ...f.rows('view.background', 'view.showStats')),
-  );
-}
-
-export function systemTab(ctx: AppContext, f: Fields): HTMLElement {
+export function systemTab(ctx: AppContext): HTMLElement {
   const upd: (() => void)[] = [];
   const refresh = (): void => upd.forEach((u) => u());
   ctx.events.on('backend', refresh);
@@ -183,7 +152,6 @@ export function systemTab(ctx: AppContext, f: Fields): HTMLElement {
 
   return page(
     panel({ id: 'sys.backend', title: 'Backend' }, backendPanel),
-    panel({ id: 'sys.depthmodel', title: 'Depth Model' }, ...f.rows('depth.model')),
     panel({ id: 'sys.models', title: 'Models' }, modelsPanel),
     panel({ id: 'sys.memory', title: 'Memory', defaultOpen: false }, memory),
     panel(

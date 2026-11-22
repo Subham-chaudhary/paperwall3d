@@ -19,11 +19,11 @@ interface Item {
 }
 
 const ITEMS: Item[] = [
-  { id: 'background', label: 'Background Plane', icon: 'mesh', panel: 'layers', suffix: 'inpainted', eye: true },
-  { id: 'foreground', label: 'Object', icon: 'mesh', panel: 'mask', suffix: 'cut-out', eye: true },
+  { id: 'background', label: 'Background Plane', icon: 'mesh', panel: 'depthLayers', suffix: 'inpainted', eye: true },
+  { id: 'foreground', label: 'Object', icon: 'mesh', panel: 'subject', suffix: 'cut-out', eye: true },
   { id: 'camera', label: 'Camera', icon: 'camera', panel: 'camera3d', eye: false },
-  { id: 'depth', label: 'Depth Map', icon: 'depth', panel: 'depth', eye: true, stage: 'depth' },
-  { id: 'mask', label: 'Object Mask', icon: 'mask', panel: 'mask', eye: true, stage: 'mask' },
+  { id: 'depth', label: 'Depth Map', icon: 'depth', panel: 'depthMap', eye: true, stage: 'depth' },
+  { id: 'mask', label: 'Object Mask', icon: 'mask', panel: 'subject', eye: true, stage: 'mask' },
 ];
 
 export function createOutliner(ctx: AppContext): HTMLElement {

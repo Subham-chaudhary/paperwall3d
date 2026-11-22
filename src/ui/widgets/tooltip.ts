@@ -8,6 +8,10 @@ export interface TipSpec {
   path?: string;
   /** Free-form extra line (e.g. shortcut). */
   extra?: string;
+  /** Section the setting lives in (advanced sub-panel), shown as its own line. */
+  section?: string;
+  /** Why the setting currently has no effect, shown as "Inactive: <reason>". May be changed while the tip exists. */
+  inactive?: string;
 }
 
 const DELAY_MS = 600;
@@ -26,6 +30,8 @@ function show(anchor: HTMLElement, spec: TipSpec): void {
   const el = h('div', { class: 'pw-tooltip' });
   if (spec.title) el.appendChild(h('div', { class: 'pw-tooltip-title', text: spec.title }));
   if (spec.desc) el.appendChild(h('div', { class: 'pw-tooltip-desc', text: spec.desc }));
+  if (spec.inactive) el.appendChild(h('div', { class: 'pw-tooltip-inactive', text: `Inactive: ${spec.inactive}` }));
+  if (spec.section) el.appendChild(h('div', { class: 'pw-tooltip-extra', text: spec.section }));
   if (spec.extra) el.appendChild(h('div', { class: 'pw-tooltip-extra', text: spec.extra }));
   if (spec.path) el.appendChild(h('div', { class: 'pw-tooltip-path', text: `config.json: ${spec.path}` }));
   document.body.appendChild(el);

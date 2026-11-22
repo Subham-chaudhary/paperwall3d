@@ -99,35 +99,8 @@
   gap: 4px;
   padding-bottom: 4px;
 }
-.pw-scene-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 2px 2px 6px;
-}
-.pw-scene-title-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 600;
-}
 .pw-scene-head .pw-prop {
-  grid-template-columns: minmax(70px, 38%) minmax(0, 1fr);
-}
-.pw-scene-foot {
-  margin-top: 6px;
-}
-.pw-scene-foot .pw-prop {
-  display: block;
-}
-.pw-scene-foot .pw-prop-label {
-  display: none;
-}
-.pw-scene-foot .pw-row > * {
-  flex: 1 1 0;
+  grid-template-columns: minmax(70px, 44%) minmax(0, 1fr);
 }
 .pw-model-badge {
   display: inline-flex;
@@ -138,25 +111,6 @@
   background: rgba(140, 43, 230, 0.28);
   color: var(--violet-text);
   vertical-align: -1px;
-}
-.pw-panel-menu {
-  all: unset;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 18px;
-  margin-left: auto;
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  cursor: default;
-}
-.pw-panel-menu + .pw-panel-grip {
-  margin-left: 4px;
-}
-.pw-panel-menu:hover {
-  background: var(--bg-hover-mid);
-  color: var(--text);
 }
 .pw-thumb.active {
   border-color: var(--accent2) !important;

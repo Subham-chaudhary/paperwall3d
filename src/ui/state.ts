@@ -1,13 +1,14 @@
 /** Ephemeral UI state (active workspace, tab, picking, preview, panel visibility) with change events. */
+import type { CategoryId } from '../core/categories';
 import { Emitter } from '../core/events';
-import type { StageView, ViewMode } from '../core/types';
+import type { SettingsPath, StageView, ViewMode } from '../core/types';
 import { DEFAULT_LAYOUT, getPref, setPref, type LayoutPrefs } from '../persistence/prefs';
 import type { IconName } from './icons';
 
 export type Workspace = 'layout' | 'mask' | 'depth' | 'camera3d' | 'config' | 'export';
-export type PropTab = 'scene' | 'image' | 'wallpaper' | 'system';
-/** Collapsible panels of the Scene tab. */
-export type ScenePanel = 'parallax' | 'layers' | 'mask' | 'depth' | 'camera3d';
+export type PropTab = 'scene' | 'image' | 'system';
+/** Collapsible panels of the Scene tab: one per settings category (src/core/categories.ts). */
+export type ScenePanel = CategoryId;
 export type LayerId = 'camera' | 'background' | 'foreground' | 'depth' | 'mask';
 export type OutlinerId = 'scene' | LayerId;
 
@@ -22,9 +23,9 @@ export interface WorkspaceDef {
 }
 
 export const WORKSPACES: readonly WorkspaceDef[] = [
-  { id: 'layout', label: 'Layout', panel: 'parallax', mode: '2d', stage: 'result' },
-  { id: 'mask', label: '1 · Mask', panel: 'mask', mode: '2d', stage: 'mask' },
-  { id: 'depth', label: '2 · Depth', panel: 'depth', mode: '2d', stage: 'objdepth' },
+  { id: 'layout', label: 'Layout', panel: 'motion', mode: '2d', stage: 'result' },
+  { id: 'mask', label: '1 · Mask', panel: 'subject', mode: '2d', stage: 'mask' },
+  { id: 'depth', label: '2 · Depth', panel: 'depthMap', mode: '2d', stage: 'objdepth' },
   { id: 'camera3d', label: '3D Camera', panel: 'camera3d', mode: '3d' },
   { id: 'config', label: 'Config', mode: 'config' },
   { id: 'export', label: 'Export' },
@@ -49,6 +50,8 @@ export interface UIEvents extends Record<string, unknown> {
   tab: PropTab;
   /** Reveal (expand + scroll to) a Scene-tab panel. */
   reveal: ScenePanel;
+  /** Jump to one setting: open its panels, scroll to it and flash it (F3 search). */
+  revealField: SettingsPath;
   sidebar: boolean;
   strip: boolean;
   drawer: boolean;
@@ -107,6 +110,11 @@ export class UIState extends Emitter<UIEvents> {
   reveal(p: ScenePanel): void {
     this.setTab('scene');
     this.emit('reveal', p);
+  }
+
+  revealField(path: SettingsPath): void {
+    this.setTab('scene');
+    this.emit('revealField', path);
   }
 
   select(id: OutlinerId): void {

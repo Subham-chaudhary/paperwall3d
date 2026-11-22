@@ -1,7 +1,9 @@
 /** F3 operator search popup (Blender's menu search): fuzzy-filter every operator and run it. */
+import { CATEGORIES } from '../core/categories';
+import { fieldSchema } from '../core/schema';
 import type { AppContext } from './context';
 import { h } from './dom';
-import { icon } from './icons';
+import { icon, type IconName } from './icons';
 import { formatShortcut, type Operator } from './operators';
 
 interface Scored {
@@ -55,6 +57,24 @@ function highlight(label: string, positions: number[]): DocumentFragment {
   return frag;
 }
 
+/**
+ * Every categorized setting as a pseudo-operator ("Setting: Motion ▸ Parallax strength"): picking one opens its
+ * panel in the Properties editor, scrolls to the field and flashes it. Listed only while a query is typed.
+ */
+const SETTING_PREFIX = 'setting:';
+const SETTING_OPS: Operator[] = CATEGORIES.flatMap((c) =>
+  c.groups.flatMap((g) =>
+    g.fields.map<Operator>((path) => ({
+      id: SETTING_PREFIX + path,
+      label: `${c.title} ▸ ${fieldSchema(path).label}`,
+      category: 'Setting',
+      icon: c.icon as IconName,
+      run: (ctx) => ctx.ui.revealField(path),
+    })),
+  ),
+);
+const isSetting = (op: Operator): boolean => op.id.startsWith(SETTING_PREFIX);
+
 let activeClose: (() => void) | null = null;
 
 export function openOperatorSearch(ctx: AppContext): void {
@@ -75,6 +95,11 @@ export function openOperatorSearch(ctx: AppContext): void {
   activeClose = close;
 
   const run = (op: Operator): void => {
+    if (isSetting(op)) {
+      close();
+      void op.run(ctx);
+      return;
+    }
     if (!ctx.ops.enabled(op.id)) return;
     close();
     ctx.ops.run(op.id);
@@ -83,7 +108,7 @@ export function openOperatorSearch(ctx: AppContext): void {
   const render = (): void => {
     list.replaceChildren();
     results.slice(0, 14).forEach((r, i) => {
-      const enabled = ctx.ops.enabled(r.op.id);
+      const enabled = isSetting(r.op) || ctx.ops.enabled(r.op.id);
       const label = r.op.label;
       const labelEl = h('span', { class: 'pw-opsearch-label' });
       // positions are computed on "category: label"; shift into the label part.
@@ -116,7 +141,7 @@ export function openOperatorSearch(ctx: AppContext): void {
       results = all.map((op) => ({ op, score: 0, positions: [] }));
     } else {
       results = [];
-      for (const op of all) {
+      for (const op of [...all, ...SETTING_OPS]) {
         const m = fuzzy(q, `${op.category}: ${op.label}`);
         if (m) results.push({ op, score: m.score, positions: m.positions });
       }

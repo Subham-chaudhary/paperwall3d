@@ -94,21 +94,61 @@
   display: inline-flex;
   color: var(--text-dim);
 }
+.pw-panel-icon {
+  display: inline-flex;
+  color: var(--text-dim);
+}
 .pw-panel-title {
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
-.pw-panel-header-widget {
+.pw-panel-actions {
   display: inline-flex;
   align-items: center;
-  margin-left: 4px;
+  gap: 2px;
+  margin-left: auto;
+  flex: none;
 }
 .pw-panel-grip {
-  margin-left: auto;
+  margin-left: 2px;
   color: var(--text-disabled);
   display: inline-flex;
+  flex: none;
+}
+.pw-panel-title + .pw-panel-grip {
+  margin-left: auto;
+}
+.pw-panel-header:hover .pw-panel-icon {
+  color: var(--text);
+}
+
+/* Sub-panels (advanced groups): flat header, indented body, thin divider above */
+.pw-panel.sub {
+  background: transparent;
+  border-radius: 0;
+  margin-top: 3px;
+  border-top: 1px solid var(--outline);
+}
+.pw-panel.sub > .pw-panel-header,
+.pw-panel.sub.collapsed > .pw-panel-header {
+  height: 20px;
+  padding: 0 2px;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+}
+.pw-panel.sub > .pw-panel-header:hover {
+  background: var(--bg-hover-soft);
+  color: var(--text);
+}
+.pw-panel.sub > .pw-panel-header .pw-panel-title {
+  font-weight: 500;
+}
+.pw-panel.sub > .pw-panel-body {
+  padding: 3px 0 4px 10px;
 }
 .pw-panel-body {
   display: flex;

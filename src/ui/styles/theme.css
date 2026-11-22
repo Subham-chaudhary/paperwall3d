@@ -224,6 +224,10 @@ body.pw-resizing-row * {
 .pw-tooltip-desc {
   color: var(--text);
 }
+.pw-tooltip-inactive {
+  margin-top: 3px;
+  color: var(--warning);
+}
 .pw-tooltip-extra {
   margin-top: 3px;
   color: var(--text-dim);

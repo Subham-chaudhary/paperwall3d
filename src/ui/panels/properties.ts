@@ -5,7 +5,7 @@ import { icon, type IconName } from '../icons';
 import type { PropTab } from '../state';
 import { tip } from '../widgets/tooltip';
 import { appendHeaderSearch } from './search';
-import { imageTab, systemTab, wallpaperTab } from './appTabs';
+import { imageTab, systemTab } from './appTabs';
 import { Fields } from './fields';
 import { sceneTab } from './settingsTabs';
 
@@ -18,7 +18,6 @@ export interface TabDef {
 export const TABS: readonly TabDef[] = [
   { id: 'scene', label: 'Scene', icon: 'scene' },
   { id: 'image', label: 'Image', icon: 'image' },
-  { id: 'wallpaper', label: 'Wallpaper', icon: 'fullscreen' },
   { id: 'system', label: 'System', icon: 'cpu' },
 ];
 
@@ -26,9 +25,8 @@ export function createProperties(ctx: AppContext): HTMLElement {
   const f = new Fields(ctx);
   const pages: Record<PropTab, HTMLElement> = {
     scene: sceneTab(ctx, f),
-    image: imageTab(ctx, f),
-    wallpaper: wallpaperTab(ctx, f),
-    system: systemTab(ctx, f),
+    image: imageTab(ctx),
+    system: systemTab(ctx),
   };
 
   const crumb = h('span', { class: 'pw-crumb-tab' });

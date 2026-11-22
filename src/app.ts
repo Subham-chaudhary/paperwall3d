@@ -12,6 +12,7 @@
  * A monotonically increasing `gen` counter invalidates in-flight jobs: any async step that finishes
  * after a newer job started (or after cancel) drops its result.
  */
+import { CATEGORIES, categoryPaths, type CategoryId } from './core/categories';
 import { Emitter } from './core/events';
 import { cloneSettings, DEFAULT_SETTINGS, mergeSettings } from './core/defaults';
 import { PRESETS } from './core/presets';
@@ -482,6 +483,29 @@ export class App implements AppContext {
     next.view = { ...next.view, mode: this.store.getValue('view.mode'), stage: this.store.getValue('view.stage') };
     this.store.replace(next);
     this.reports.info('Settings reset to defaults');
+  }
+
+  resetCategory(id: CategoryId): void {
+    const cat = CATEGORIES.find((c) => c.id === id);
+    if (!cat) return;
+    const next = cloneSettings(this.store.get());
+    const dst = next as unknown as Record<string, Record<string, unknown>>;
+    const src = DEFAULT_SETTINGS as unknown as Record<string, Record<string, unknown>>;
+    const paths: string[] = categoryPaths(id);
+    // Resetting the subject mask also drops a picked object (mask.click is otherwise left alone).
+    if (id === 'subject') paths.push('mask.click');
+    let changed = false;
+    for (const p of paths) {
+      const [s, k] = p.split('.') as [string, string];
+      const section = dst[s];
+      const def = src[s];
+      if (!section || !def || section[k] === def[k]) continue;
+      section[k] = def[k];
+      changed = true;
+    }
+    // replace() records ONE undo checkpoint; the store's invalidation re-runs whatever the reset changed.
+    if (changed) this.store.replace(next);
+    this.reports.info(`Reset ${cat.title.replace(/^\d+\s*·\s*/, '')} to defaults`);
   }
 
   resetView(): void {

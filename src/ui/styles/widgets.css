@@ -41,7 +41,7 @@
 
 .pw-prop {
   display: grid;
-  grid-template-columns: minmax(70px, 38%) minmax(0, 1fr);
+  grid-template-columns: minmax(70px, 44%) minmax(0, 1fr);
   align-items: center;
   column-gap: 8px;
   min-height: 22px;
@@ -71,16 +71,52 @@
 .pw-info-text {
   user-select: text;
 }
+/* Blender's "inactive" look: dimmed but still interactive (the setting currently has no effect). */
 .pw-prop.inactive .pw-prop-label,
 .pw-col.inactive > .pw-prop .pw-prop-label {
   color: var(--text-disabled);
+}
+.pw-prop.inactive .pw-prop-field,
+.pw-prop.inactive .pw-prop-label {
+  opacity: 0.45;
 }
 .pw-col.inactive .pw-num,
 .pw-col.inactive .pw-enum,
 .pw-col.inactive .pw-seg-btn,
 .pw-col.inactive .pw-color,
 .pw-col.inactive .pw-check {
-  opacity: 0.5;
+  opacity: 0.45;
+}
+/* F3 search jump target */
+.pw-prop.flash {
+  animation: pw-flash 1.8s ease-out;
+}
+@keyframes pw-flash {
+  0%,
+  40% {
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+.pw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.pw-actions > .pw-btn {
+  flex: 1 1 110px;
+  min-width: 0;
+}
+.pw-actions > .pw-btn[hidden] {
+  display: none;
+}
+.pw-actions.filtered-out {
+  display: none;
 }
 .pw-prop.filtered-out {
   display: none;
@@ -470,7 +506,15 @@
 .pw-icon-toggle.on {
   color: var(--text);
 }
+.pw-icon-toggle.pw-hdr-toggle {
+  width: 20px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+}
 .pw-icon-toggle.pw-hdr-toggle.on {
   background: var(--accent);
   color: var(--text-on-accent);
+}
+.pw-actions > .pw-btn.primary {
+  flex-basis: 100%;
 }

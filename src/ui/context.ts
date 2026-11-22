@@ -1,4 +1,5 @@
 /** The surface the UI layer uses to talk to the application orchestrator (src/app.ts). */
+import type { CategoryId } from '../core/categories';
 import type { Emitter } from '../core/events';
 import type { SettingsStore } from '../core/store';
 import type {
@@ -61,6 +62,8 @@ export interface AppContext {
   cancelJob(): void;
   newScene(): void;
   resetSettings(): void;
+  /** Put every setting of one Properties category back to its default (one undo step). */
+  resetCategory(id: CategoryId): void;
 
   listModels(): Promise<ModelCacheEntry[]>;
   clearModelCache(): Promise<void>;
