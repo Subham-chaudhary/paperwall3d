@@ -120,22 +120,30 @@ export class SettingsStore {
 
 export type Invalidation = 'analyze' | 'reconstruct' | 'render' | 'none';
 
+/** Settings that change a model's raw output (2.5dwallpp: mask key = model|flip|refine, depth key = input size). */
 const ANALYZE_PATHS = new Set<SettingsPath>([
-  'segmentation.model',
-  'segmentation.enabled',
+  'mask.use_subject',
+  'mask.mask_model',
+  'mask.flip_avg',
+  'mask.refine',
   'depth.model',
+  'depth.depth_size',
   'runtime.backend',
   'runtime.workingResolution',
 ]);
 
-/** Which pipeline stage a settings change invalidates. */
+/**
+ * Which pipeline stage a settings change invalidates:
+ * model keys → 'analyze'; other mask/depth keys → 'reconstruct' (re-split, no model run);
+ * parallax/layers/camera3d/view/wallpaper → 'render' (instant, GPU only).
+ */
 export function invalidation(changed: SettingsPath[]): Invalidation {
   const rank: Record<Invalidation, number> = { none: 0, render: 1, reconstruct: 2, analyze: 3 };
   let level: Invalidation = 'none';
   for (const p of changed) {
     let l: Invalidation = 'render';
     if (ANALYZE_PATHS.has(p)) l = 'analyze';
-    else if (p.startsWith('segmentation.') || p.startsWith('depth.') || p.startsWith('reconstruction.')) l = 'reconstruct';
+    else if (p.startsWith('mask.') || p.startsWith('depth.')) l = 'reconstruct';
     if (rank[l] > rank[level]) level = l;
   }
   return level;
