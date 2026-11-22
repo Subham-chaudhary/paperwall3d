@@ -1,5 +1,5 @@
 /**
- * Procedural placeholder scene shown before the user loads an image:
+ * Procedural placeholder scene shown before the user loads an image, as a full 2.5dwallpp layer set:
  * the logo's world: electric-blue sky, hot-pink sun, neon-edged purple/navy mountain layers and a lone
  * pink tree on a dark mound as the foreground subject.
  * Everything is drawn with Canvas2D (source, background-without-subject, subject, depth) so it
@@ -127,7 +127,7 @@ function drawSubject(ctx: Ctx, depthMode: boolean): void {
   if (depthMode) {
     const g = ctx.createRadialGradient(cx, groundY, 10, cx, groundY, 210);
     g.addColorStop(0, gray(0.86));
-    g.addColorStop(1, gray(0.7));
+    g.addColorStop(1, gray(0.78));
     ctx.fillStyle = g;
   } else {
     const g = ctx.createLinearGradient(0, groundY - 62, 0, groundY);
@@ -165,7 +165,7 @@ function drawSubject(ctx: Ctx, depthMode: boolean): void {
     const g = ctx.createRadialGradient(bx + r * 0.3, by - r * 0.3, r * 0.1, bx, by, r);
     if (depthMode) {
       g.addColorStop(0, gray(1));
-      g.addColorStop(1, gray(0.72));
+      g.addColorStop(1, gray(0.86));
     } else {
       g.addColorStop(0, '#ff3c9e');
       g.addColorStop(0.45, '#ff1f6b');
@@ -214,13 +214,15 @@ export function createDemoScene(): PreparedScene {
 
   const bg = makeCanvas();
   drawBackdrop(bg.ctx, false);
-  const background = readPixels(bg.ctx);
+  const bgColor = readPixels(bg.ctx);
 
-  // Subject alone on a transparent canvas -> foreground RGBA (straight alpha) and mask.
+  // Subject alone on a transparent canvas -> object RGBA (straight alpha, edge colours bled outward) and mask.
   const fgC = makeCanvas();
+  fgC.ctx.filter = 'blur(1px)'; // feathered cut-out edge, like the pipeline's mask feather
   drawSubject(fgC.ctx, false);
-  const foreground = readPixels(fgC.ctx);
-  bleedEdges(foreground, 3);
+  fgC.ctx.filter = 'none';
+  const fg = readPixels(fgC.ctx);
+  bleedEdges(fg, 3);
 
   // Composite = source.
   const srcC = makeCanvas();
@@ -228,22 +230,52 @@ export function createDemoScene(): PreparedScene {
   srcC.ctx.drawImage(fgC.canvas, 0, 0);
   const source = readPixels(srcC.ctx);
 
-  // Depth: backdrop + subject rendered as grayscale.
+  // Whole-image depth (backdrop + subject) and the backdrop alone (the demo's "inpainted" background depth).
   const dC = makeCanvas();
   drawBackdrop(dC.ctx, true);
+  const bgDepthPix = readPixels(dC.ctx).data;
   drawSubject(dC.ctx, true);
-  const dPix = readPixels(dC.ctx).data;
+  const depthPix = readPixels(dC.ctx).data;
+
+  // Subject depth alone, edge values bled outward (the demo's stand-in for the pipeline's rim fix, so the
+  // object's silhouette is a clean depth cliff instead of a blurry ramp).
+  const sdC = makeCanvas();
+  drawSubject(sdC.ctx, true);
+  const subjectDepth = readPixels(sdC.ctx);
+  bleedEdges(subjectDepth, 3);
+  const sdPix = subjectDepth.data;
 
   const n = W * H;
   const depth = new Float32Array(n);
+  const bgDepth = new Float32Array(n);
   const mask = new Float32Array(n);
-  const fgData = foreground.data;
-  let any = false;
+  const objDepth = new Float32Array(n);
+  const fgData = fg.data;
+  let lo = 1;
+  let hi = 0;
+  let cx = 0;
+  let cy = 0;
+  let area = 0;
+  const objRaw = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    depth[i] = dPix[i * 4]! / 255;
+    const d = depthPix[i * 4]! / 255;
+    depth[i] = d;
+    bgDepth[i] = bgDepthPix[i * 4]! / 255;
     const a = fgData[i * 4 + 3]! / 255;
     mask[i] = a;
-    if (a > 0.5) any = true;
+    objRaw[i] = a > 0.01 ? sdPix[i * 4]! / 255 : d;
+    if (a > 0.5) {
+      lo = Math.min(lo, d);
+      hi = Math.max(hi, d);
+      cx += i % W;
+      cy += Math.floor(i / W);
+      area++;
+    }
+  }
+  // Object depth re-scaled to 0..1 inside the mask, 0 outside.
+  const span = Math.max(hi - lo, 1e-3);
+  for (let i = 0; i < n; i++) {
+    if (mask[i]! > 0.01) objDepth[i] = Math.min(1, Math.max(0, (objRaw[i]! - lo) / span));
   }
 
   return {
@@ -252,9 +284,15 @@ export function createDemoScene(): PreparedScene {
     source,
     mask,
     depth,
-    background,
-    foreground,
-    hasForeground: any,
+    bgColor,
+    bgDepth,
+    fg,
+    // Object depth in the true range (rim-fixed inside the mask, whole-image depth around it).
+    fgDepth: objRaw,
+    objDepth,
+    center: area ? [cx / area / W, cy / area / H] : [0.5, 0.5],
+    coverage: area / n,
+    hasForeground: area > 0,
     timings: { demo: performance.now() - t0 },
   };
 }

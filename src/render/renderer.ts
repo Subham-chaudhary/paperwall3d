@@ -1,40 +1,45 @@
 /**
- * PaperRenderer: the IRenderer implementation. Owns the WebGLRenderer, scene graph, camera rig,
- * render loop (rAF, paused while the tab is hidden, frames only drawn when something changed or
- * the camera is still animating) and the diff-based settings application.
+ * PaperRenderer: the IRenderer implementation. Owns the WebGLRenderer, the two views (2D parallax wallpaper,
+ * 3D orbit), the render loop (rAF, paused while the tab is hidden, frames only drawn when something changed or
+ * is still animating) and the settings application.
  *
- * Geometry displacement is CPU-side (see displacementMesh.ts): relief/elevation/scale/fov changes
- * only rewrite the position/normal typed arrays in place; topology is rebuilt only when
- * meshResolution, overscan or discontinuityCutoff change.
+ * Pointer convention: `setPointer` takes y UP (-1..1); internally the cursor follows 2.5dwallpp (y down).
  */
 import * as THREE from 'three';
 import { cloneSettings, DEFAULT_SETTINGS } from '../core/defaults';
-import type { IRenderer, PreparedScene, RenderStats, Settings } from '../core/types';
-import { CameraRig } from './cameraRig';
-import { exportLayersToGLB } from './exporter';
-import { createGridHelper, disposeGridHelper } from './gridHelper';
-import { SceneLayers } from './layers';
-import { applyLighting, createSharedUniforms, type SharedUniforms } from './materials';
+import type { IRenderer, PreparedScene, Presentation, RenderStats, Settings } from '../core/types';
+import { exportSceneToGLB } from './exporter';
+import { buildHtmlWallpaper } from './htmlWallpaper';
+import { fitRect, type FitMode } from './layout';
+import { OrbitView } from './orbitView';
+import { marchSteps } from './parallaxShader';
+import { ParallaxView, type ParallaxFrame } from './parallaxView';
 import { captureScreenshot } from './screenshot';
-import { applyViewMode, isExploded } from './viewModes';
 
 const FPS_TIME_CONSTANT = 0.5; // seconds
+const CURSOR_EPS = 1e-4;
+
+const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), hi);
 
 export class PaperRenderer implements IRenderer {
   readonly canvas: HTMLCanvasElement;
 
   private readonly container: HTMLElement;
   private readonly renderer: THREE.WebGLRenderer;
-  private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(35, 1, 0.05, 200);
-  private readonly rig: CameraRig;
-  private readonly shared: SharedUniforms = createSharedUniforms();
-  private readonly grid = createGridHelper();
+  private readonly parallax: ParallaxView;
+  private readonly orbit: OrbitView;
   private readonly resizeObserver: ResizeObserver;
 
-  private layers: SceneLayers | null = null;
-  private readonly layerVisible = { background: true, foreground: true };
+  private scene: PreparedScene | null = null;
   private settings: Settings = cloneSettings(DEFAULT_SETTINGS);
+  private readonly layerVisible = { background: true, foreground: true };
+  private presentation: Presentation = 'editor';
+  private picking = false;
+
+  /** Pointer target and smoothed cursor, -1..1, y down (2.5dwallpp convention). */
+  private readonly mouse = { x: 0, y: 0 };
+  private readonly cur = { x: 0, y: 0 };
+
   private width = 1;
   private height = 1;
   private pixelRatio = 1;
@@ -61,7 +66,6 @@ export class PaperRenderer implements IRenderer {
       powerPreference: 'high-performance',
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // Exposure is applied inside the layer shader; no global tone mapping so neutral settings reproduce the source.
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.autoClear = true;
 
@@ -74,8 +78,9 @@ export class PaperRenderer implements IRenderer {
       /* keep default */
     }
 
-    this.scene.add(this.grid);
-    this.rig = new CameraRig(this.canvas, this.settings.camera);
+    const aniso = this.renderer.capabilities.getMaxAnisotropy();
+    this.parallax = new ParallaxView(aniso);
+    this.orbit = new OrbitView(aniso);
 
     this.canvas.addEventListener('webglcontextlost', this.onContextLost);
     this.canvas.addEventListener('webglcontextrestored', this.onContextRestored);
@@ -84,7 +89,7 @@ export class PaperRenderer implements IRenderer {
     this.resizeObserver = new ResizeObserver(() => this.syncSizeToContainer());
     this.resizeObserver.observe(container);
 
-    this.applyNonGeometrySettings();
+    this.applySettings();
     this.syncSizeToContainer();
     this.start();
   }
@@ -93,28 +98,20 @@ export class PaperRenderer implements IRenderer {
 
   setScene(scene: PreparedScene, settings: Settings): void {
     this.settings = cloneSettings(settings);
-    this.disposeLayers();
-    const layers = new SceneLayers(scene, this.shared, this.renderer.capabilities.getMaxAnisotropy());
-    this.layers = layers;
-    this.applyLayerVisibility();
-    this.scene.add(layers.group);
-    this.rig.setImageAspect(layers.aspect);
-    this.rig.setSettings(this.settings.camera);
-    layers.update(this.settings.geometry, this.rig.restDistance(this.aspect()));
-    this.applyNonGeometrySettings();
-    this.dirty = true;
+    this.scene = scene;
+    this.parallax.setScene(scene);
+    this.orbit.setScene(scene);
+    this.applySettings();
   }
 
   updateSettings(next: Settings): void {
     this.settings = cloneSettings(next);
-    this.rig.setSettings(this.settings.camera);
-    this.layers?.update(this.settings.geometry, this.rig.restDistance(this.aspect()));
-    this.applyNonGeometrySettings();
-    this.dirty = true;
+    this.applySettings();
   }
 
   setPointer(x: number, y: number): void {
-    this.rig.setPointer(x, y);
+    this.mouse.x = clamp(x, -1, 1);
+    this.mouse.y = clamp(-y, -1, 1);
   }
 
   resize(width: number, height: number): void {
@@ -122,20 +119,35 @@ export class PaperRenderer implements IRenderer {
   }
 
   resetView(): void {
-    this.rig.reset();
+    this.orbit.resetCamera();
+    this.cur.x = this.mouse.x;
+    this.cur.y = this.mouse.y;
     this.dirty = true;
   }
 
   setLayerVisibility(layer: 'background' | 'foreground', visible: boolean): void {
     this.layerVisible[layer] = visible;
-    this.applyLayerVisibility();
-    this.dirty = true;
+    this.applySettings();
   }
 
-  private applyLayerVisibility(): void {
-    if (!this.layers) return;
-    this.layers.background.object.visible = this.layerVisible.background;
-    if (this.layers.foreground) this.layers.foreground.object.visible = this.layerVisible.foreground;
+  setPresentation(mode: Presentation): void {
+    this.presentation = mode;
+    this.applySettings();
+  }
+
+  setPicking(on: boolean): void {
+    this.picking = on;
+    this.applySettings();
+  }
+
+  imagePointAt(clientX: number, clientY: number): [number, number] | null {
+    if (!this.scene || this.settings.view.mode !== '2d') return null;
+    const box = this.canvas.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) return null;
+    const rect = fitRect(box.width, box.height, this.scene.width, this.scene.height, this.fit());
+    const u = (clientX - box.left - rect.x) / rect.w;
+    const v = (clientY - box.top - rect.y) / rect.h;
+    return u < 0 || u > 1 || v < 0 || v > 1 ? null : [u, v];
   }
 
   getStats(): RenderStats {
@@ -143,30 +155,30 @@ export class PaperRenderer implements IRenderer {
   }
 
   async exportGLB(): Promise<Blob> {
-    if (!this.layers) throw new Error('No scene loaded');
-    // Rest pose camera: zoom/pointer/orbit ignored, centred on the image.
-    const cam = new THREE.PerspectiveCamera(this.settings.camera.fov, this.aspect(), 0.05, 200);
-    cam.position.set(0, 0, this.rig.restDistance(this.aspect()));
-    cam.lookAt(0, 0, 0);
-    cam.updateMatrixWorld();
-    return exportLayersToGLB(this.layers, cam);
+    if (!this.scene) throw new Error('No scene loaded');
+    return exportSceneToGLB(this.scene, this.settings, {
+      showBackground: this.settings.camera3d.showbg,
+      showForeground: this.scene.hasForeground,
+    });
+  }
+
+  async exportHTML(options?: { title?: string }): Promise<Blob> {
+    if (!this.scene) throw new Error('No scene loaded');
+    return buildHtmlWallpaper(this.scene, this.settings, options);
   }
 
   async screenshot(width?: number, height?: number): Promise<Blob> {
-    const wasGrid = this.grid.visible;
-    this.grid.visible = false;
+    if (!this.scene) throw new Error('No scene loaded');
     try {
-      this.prepareFrame();
       return await captureScreenshot({
         renderer: this.renderer,
-        scene: this.scene,
-        rig: this.rig,
-        imageAspect: this.layers?.aspect ?? this.aspect(),
+        view: this.parallax,
+        frame: this.frameState(),
+        imageAspect: this.scene.width / this.scene.height,
         width,
         height,
       });
     } finally {
-      this.grid.visible = wasGrid;
       this.dirty = true;
     }
   }
@@ -179,10 +191,8 @@ export class PaperRenderer implements IRenderer {
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.canvas.removeEventListener('webglcontextlost', this.onContextLost);
     this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
-    this.rig.dispose();
-    this.disposeLayers();
-    this.scene.remove(this.grid);
-    disposeGridHelper(this.grid);
+    this.orbit.dispose();
+    this.parallax.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.canvas.remove();
@@ -190,15 +200,25 @@ export class PaperRenderer implements IRenderer {
 
   // ───────────────────────────────────────── internals ─────────────────────────────────────────
 
-  private aspect(): number {
-    return this.width / this.height;
+  /** Flat aids (picking, stage overlays) are always contain-fitted; the live result follows the presentation. */
+  private fit(): FitMode {
+    if (this.picking || this.settings.view.stage !== 'result') return 'contain';
+    return this.presentation === 'wallpaper' ? 'cover' : 'contain';
   }
 
-  private disposeLayers(): void {
-    if (!this.layers) return;
-    this.scene.remove(this.layers.group);
-    this.layers.dispose();
-    this.layers = null;
+  private frameState(): ParallaxFrame {
+    return {
+      settings: this.settings,
+      cur: this.cur,
+      fit: this.fit(),
+      steps: marchSteps(this.width * this.height * this.pixelRatio * this.pixelRatio),
+      vw: this.width,
+      vh: this.height,
+      stage: this.settings.view.stage,
+      picking: this.picking,
+      showBackground: this.layerVisible.background,
+      showForeground: this.layerVisible.foreground,
+    };
   }
 
   private syncSizeToContainer(): void {
@@ -208,36 +228,55 @@ export class PaperRenderer implements IRenderer {
   }
 
   private setSize(w: number, h: number): void {
-    const pr = Math.min(window.devicePixelRatio || 1, 2);
+    // devicePixelRatio capped at 2, and the drawing buffer kept within MAX_TEXTURE_SIZE
+    const maxBuffer = this.renderer.capabilities.maxTextureSize;
+    const pr = Math.max(0.25, Math.min(window.devicePixelRatio || 1, 2, maxBuffer / w, maxBuffer / h));
     if (w === this.width && h === this.height && pr === this.pixelRatio) return;
-    const aspectChanged = w / h !== this.aspect();
     this.width = w;
     this.height = h;
     this.pixelRatio = pr;
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
-    // The cover-fit distance depends on the viewport aspect, so perspective pre-compensation must follow.
-    if (aspectChanged) this.layers?.update(this.settings.geometry, this.rig.restDistance(this.aspect()));
+    this.orbit.resize(w, h);
     this.dirty = true;
   }
 
-  /** Everything except geometry: lighting, view mode, background, grid. */
-  private applyNonGeometrySettings(): void {
+  /** Push current settings into the active view. */
+  private applySettings(): void {
     const s = this.settings;
     this.renderer.setClearColor(new THREE.Color(s.view.background), 1);
-    this.grid.visible = s.view.showGrid;
-    applyViewMode(s.view.mode, this.shared, this.layers);
-    this.rig.setLayersView(isExploded(s.view.mode));
-    const p = this.rig.lightPointer;
-    applyLighting(this.shared, s.lighting, p.x, p.y);
+    if (s.view.mode === '3d') {
+      this.orbit.setActive(this.canvas);
+      this.orbit.sync({
+        settings: s,
+        showBackground: this.layerVisible.background,
+        showForeground: this.layerVisible.foreground,
+        showGrid: this.presentation === 'editor',
+      });
+    } else {
+      this.orbit.setActive(null);
+    }
+    this.dirty = true;
   }
 
-  /** Per-frame state that depends on the rig: light steering and exploded offsets. */
-  private prepareFrame(): void {
-    const p = this.rig.lightPointer;
-    applyLighting(this.shared, this.settings.lighting, p.x, p.y);
-    this.layers?.setExplode(this.rig.layersBlend);
-    this.rig.apply(this.camera, this.aspect());
+  /** Cursor follow: frame-rate independent lerp toward the pointer (or the auto-motion path). True if it moved. */
+  private stepCursor(now: number, dt: number): boolean {
+    const P = this.settings.parallax;
+    if (P.autoMotion) {
+      this.mouse.x = Math.sin(now / 1800) * 0.8;
+      this.mouse.y = Math.cos(now / 2300) * 0.5;
+    }
+    const still = this.picking || this.settings.view.stage !== 'result'; // keep the picture steady while picking
+    const tx = still ? 0 : this.mouse.x;
+    const ty = still ? 0 : this.mouse.y;
+    const k = 1 - Math.pow(1 - clamp(P.smoothing, 0.001, 1), dt * 60);
+    const px = this.cur.x;
+    const py = this.cur.y;
+    this.cur.x += (tx - px) * k;
+    this.cur.y += (ty - py) * k;
+    if (Math.abs(tx - this.cur.x) < CURSOR_EPS) this.cur.x = tx;
+    if (Math.abs(ty - this.cur.y) < CURSOR_EPS) this.cur.y = ty;
+    return this.cur.x !== px || this.cur.y !== py;
   }
 
   private start(): void {
@@ -254,12 +293,14 @@ export class PaperRenderer implements IRenderer {
     // Smoothed frame rate from rAF cadence (equals the achieved fps when rendering every frame).
     if (dt > 0) this.fps += (1 / dt - this.fps) * (1 - Math.exp(-dt / FPS_TIME_CONSTANT));
 
-    const animating = this.rig.update(dt);
-    if (this.contextLost || !(this.dirty || animating)) return;
+    const mode = this.settings.view.mode;
+    if (mode === 'config' || this.contextLost) return;
+    const animating = mode === '3d' ? this.orbit.update(dt) : this.stepCursor(now, dt);
+    if (!(this.dirty || animating)) return;
     this.dirty = false;
 
-    this.prepareFrame();
-    this.renderer.render(this.scene, this.camera);
+    if (mode === '3d') this.orbit.render(this.renderer);
+    else this.parallax.render(this.renderer, this.frameState());
 
     const info = this.renderer.info;
     this.stats = {

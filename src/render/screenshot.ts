@@ -1,15 +1,17 @@
 /**
- * Still capture: renders the live scene from the current camera pose into an offscreen,
- * multisampled render target at the requested size and encodes it as PNG.
- * The visible canvas and the renderer's own state are untouched.
+ * Still capture of the 2D parallax result: renders the view (current cursor state, cover-fit to the requested
+ * aspect, no overlays) into an offscreen multisampled target and encodes it as PNG. The visible canvas and the
+ * renderer's own state are untouched.
  */
 import * as THREE from 'three';
-import type { CameraRig } from './cameraRig';
+import { PARALLAX_MAX_STEPS } from './parallaxShader';
+import type { ParallaxFrame, ParallaxView } from './parallaxView';
 
 export interface ScreenshotOptions {
   renderer: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  rig: CameraRig;
+  view: ParallaxView;
+  /** Frame to render; `vw`/`vh`/`fit`/`steps` are overridden (stills always march the full 48 steps). */
+  frame: ParallaxFrame;
   /** Source image aspect (width / height) for defaulting the output size. */
   imageAspect: number;
   width?: number;
@@ -35,25 +37,28 @@ export async function captureScreenshot(o: ScreenshotOptions): Promise<Blob> {
   w = Math.max(1, Math.floor(w * k));
   h = Math.max(1, Math.floor(h * k));
 
+  // The parallax shader writes raw (gamma-space) values, so the target must not be sRGB-encoded by the hardware.
   const rt = new THREE.WebGLRenderTarget(w, h, {
     type: THREE.UnsignedByteType,
     format: THREE.RGBAFormat,
     samples: Math.min(4, renderer.capabilities.maxSamples),
-    depthBuffer: true,
+    depthBuffer: false,
   });
-  rt.texture.colorSpace = THREE.SRGBColorSpace; // makes the shaders encode to sRGB like the canvas
-
-  const cam = new THREE.PerspectiveCamera();
-  o.rig.apply(cam, w / h);
 
   const prevTarget = renderer.getRenderTarget();
+  const prevClear = renderer.getClearColor(new THREE.Color());
+  const prevAlpha = renderer.getClearAlpha();
   const pixels = new Uint8Array(w * h * 4);
   try {
+    // The target is not colour managed: hand the renderer the sRGB numbers as if they were linear so they land unchanged.
+    const raw = new THREE.Color(o.frame.settings.view.background).getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace);
+    renderer.setClearColor(new THREE.Color().setRGB(raw.r, raw.g, raw.b, THREE.LinearSRGBColorSpace), 1);
     renderer.setRenderTarget(rt);
-    renderer.render(o.scene, cam);
+    o.view.render(renderer, { ...o.frame, vw: w, vh: h, fit: 'cover', steps: PARALLAX_MAX_STEPS, stage: 'result', picking: false });
     renderer.readRenderTargetPixels(rt, 0, 0, w, h, pixels);
   } finally {
     renderer.setRenderTarget(prevTarget);
+    renderer.setClearColor(prevClear, prevAlpha);
     rt.dispose();
   }
 
