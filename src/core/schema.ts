@@ -59,11 +59,11 @@ export const SCHEMA: { [S in SettingsSection]: SectionSchema } = {
     label: 'Parallax',
     shared: true,
     fields: {
-      strength: num('Strength', 'Camera shift of the parallax, as a fraction of the image', 0, 0.12, 0.002, { slider: true }),
+      strength: num('Parallax strength', 'Camera shift of the parallax, as a fraction of the image', 0, 0.12, 0.002, { slider: true }),
       focus: num('Focus plane', 'Depth that stays fixed in place (0 = far, 1 = near)', 0, 1, 0.01, { slider: true }),
       tilt: num('Tilt (°)', 'Tilt of the whole picture toward the cursor, in degrees', 0, 20, 0.5),
       lighting: num('Lighting', 'Depth-based shading that follows the cursor', 0, 1, 0.01, { slider: true }),
-      smoothing: num('Smoothing', 'How quickly the view follows the cursor (higher = snappier)', 0.02, 0.4, 0.01, { slider: true }),
+      smoothing: num('Cursor smoothing', 'How quickly the view follows the cursor (higher = snappier)', 0.02, 0.4, 0.01, { slider: true }),
       autoMotion: bool('Auto motion', 'Move on its own, no mouse needed'),
       inverse: bool('Inverse parallax', 'Inverse parallax direction'),
     },
@@ -72,7 +72,7 @@ export const SCHEMA: { [S in SettingsSection]: SectionSchema } = {
     label: 'Layers (2D + 3D)',
     shared: true,
     fields: {
-      scope: enm('3D scope', 'Where depth is applied', [
+      scope: enm('Depth applies to', 'Where depth is applied', [
         { value: 'subject', label: 'Subject only (background flat)' },
         { value: 'all', label: 'Whole image' },
       ]),
@@ -86,7 +86,7 @@ export const SCHEMA: { [S in SettingsSection]: SectionSchema } = {
     shared: true,
     fields: {
       use_subject: bool('Separate object', 'Separate the object from the background at all', true),
-      mask_model: enm('Model', 'Masking model', [
+      mask_model: enm('Mask model', 'Masking model', [
         { value: 'u2net', label: 'U²-Net (176 MB, accurate)' },
         { value: 'u2netp', label: 'U²-NetP (4.6 MB, fast, partial)' },
       ], true),
@@ -110,7 +110,7 @@ export const SCHEMA: { [S in SettingsSection]: SectionSchema } = {
     shared: true,
     fields: {
       model: {
-        ...enm('Model', 'Depth model (heuristic = offline fallback, no download)', [
+        ...enm('Depth model', 'Depth model (heuristic = offline fallback, no download)', [
           { value: 'depth-anything-v2-small', label: 'Depth Anything V2 Small' },
           { value: 'heuristic', label: 'Heuristic (offline)' },
         ], true),
@@ -119,7 +119,7 @@ export const SCHEMA: { [S in SettingsSection]: SectionSchema } = {
       depth_size: num('Model input size (px)', 'Short side fed to the depth model, in px (bigger = finer but slower)', 252, 1008, 14, { model: true }),
       clip_lo: num('Clip low (percentile)', 'Percentile clipped at the near end', 0, 40, 0.5),
       clip_hi: num('Clip high (percentile)', 'Percentile clipped at the far end', 60, 100, 0.5),
-      smooth: num('Smoothing σ', 'Gaussian smoothing of the depth map, sigma in px', 0, 6, 0.1),
+      smooth: num('Depth smoothing σ', 'Gaussian smoothing of the depth map, sigma in px', 0, 6, 0.1),
       edge_snap: num('Edge snap to image (px)', "Snap depth edges to the photo's edges, radius in px (0 = off)", 0, 30, 1),
       gamma: num('Gamma', 'Below 1 pushes mid depths forward, above 1 pushes them back', 0.3, 3, 0.05),
       depth_invert: bool('Invert depth (near ↔ far)', 'Flip near and far'),
