@@ -1,6 +1,19 @@
-# PaperWall3D
+<p align="center">
+  <img src="public/logo.svg" alt="PaperWall3D logo" width="160" height="160">
+</p>
 
-Turn any photo or artwork into a depth-aware **3D parallax wallpaper**, entirely in your browser.
+<h1 align="center">PaperWall3D</h1>
+
+<p align="center">
+  Turn any photo or artwork into a depth-aware <b>3D parallax wallpaper</b>, entirely in your browser.
+</p>
+
+<p align="center">
+  <img alt="version" src="https://img.shields.io/badge/version-1.2.0-0a6cff">
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-ff1f6b">
+  <img alt="runs" src="https://img.shields.io/badge/runs-100%25%20client--side-e6ff3b?labelColor=14104a">
+  <img alt="netlify" src="https://img.shields.io/badge/deploy-Netlify-00d6f0?labelColor=14104a">
+</p>
 
 PaperWall3D runs AI models locally to find the main subject, estimate scene depth, separate the image into layers and rebuild it as lightweight 2.5D geometry. You tune depth, relief, segmentation, lighting and camera motion in a live 3D preview with a Blender-style interface, then export a GLB or a reusable wallpaper config.
 
@@ -31,6 +44,22 @@ AI inference runs only while preparing the image. Moving the cursor never re-run
 - **View modes.** Rendered, depth (turbo colormap), mask, wireframe overlay, and an exploded *layers* view.
 - **Projects.** Saved to IndexedDB with the analysis cached, so reopening a project skips the AI step.
 - **Fullscreen preview.** **F11** or **Ctrl+Space** hides the UI so you can use the scene as a live wallpaper.
+
+## Brand
+
+The logo shows three stacked photo cards with long shadows, standing for an image peeled into layers. The UI theme is built from the same palette: Blender's layout and density, recoloured neon-on-black.
+
+| Swatch | Hex | Used for |
+| --- | --- | --- |
+| ![#0a6cff](https://img.shields.io/badge/-%20-0a6cff?style=flat-square) | `#0a6cff` | Primary accent: selection, sliders, active tools, progress |
+| ![#ff1f6b](https://img.shields.io/badge/-%20-ff1f6b?style=flat-square) | `#ff1f6b` | Active highlight: active object, workspace tab, version badge |
+| ![#ff3c9e](https://img.shields.io/badge/-%20-ff3c9e?style=flat-square) | `#ff3c9e` | Sun, foreground wireframe |
+| ![#e6ff3b](https://img.shields.io/badge/-%20-e6ff3b?style=flat-square) | `#e6ff3b` | Warnings, sparing highlights |
+| ![#e61ee8](https://img.shields.io/badge/-%20-e61ee8?style=flat-square) | `#e61ee8` | Secondary highlights, ridge lines |
+| ![#2fe6ff](https://img.shields.io/badge/-%20-2fe6ff?style=flat-square) | `#2fe6ff` | Info and success reports |
+| ![#14104a](https://img.shields.io/badge/-%20-14104a?style=flat-square) | `#14104a` | Base hue of the dark, indigo-tinted neutrals |
+
+The logo lives in [`public/logo.svg`](public/logo.svg) (on black) and [`public/favicon.svg`](public/favicon.svg) (transparent, cropped).
 
 ## Technology
 
