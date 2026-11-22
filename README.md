@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.0.0-0a6cff">
+  <img alt="version" src="https://img.shields.io/badge/version-2.0.1-0a6cff">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-ff1f6b">
   <img alt="runs" src="https://img.shields.io/badge/runs-100%25%20client--side-e6ff3b?labelColor=14104a">
   <img alt="netlify" src="https://img.shields.io/badge/deploy-Netlify-00d6f0?labelColor=14104a">

@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] - 2026-11-22
+
+### Fixed
+- The live HTML wallpaper no longer stays black inside wallpaper apps. It used to wait until the page was visible before drawing, but wallpaper hosts often run the page as "hidden" with `requestAnimationFrame` suspended. It now draws immediately, and a timer keeps it rendering when animation frames are paused.
+- The HTML wallpaper listens for plain `mousemove` events as well as pointer events, since wallpaper apps forward the cursor that way. It also re-checks the window size every frame, because some hosts start at 0×0.
+- If WebGL or a shader fails, the page shows the error on screen instead of a silent black screen.
+
 ## [2.0.0] - 2026-11-22
 
 The workflow, options and layer model now follow the sibling project 2.5dwallpp, while keeping the Blender-style UI.
