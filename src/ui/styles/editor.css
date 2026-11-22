@@ -1,0 +1,440 @@
+/* Viewport header groups, Scene tab header, model badge, config.json editor and the wallpaper preview. */
+
+.pw-tool[disabled] {
+  pointer-events: none;
+}
+.pw-tool[disabled]:hover {
+  background: transparent;
+}
+
+/* ───────── viewport header ───────── */
+.pw-vp-header {
+  overflow: hidden;
+}
+.pw-vp-stage,
+.pw-vp-pick,
+.pw-vp-cam {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  flex: none;
+}
+.pw-vp-lbl {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.pw-vp-header .pw-btn {
+  height: 20px;
+}
+.pw-vp-header .pw-btn.icon-only {
+  width: 20px;
+}
+.pw-vp-header .pw-btn.active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.pw-vp-header .pw-vp-modes {
+  flex: none;
+  width: auto;
+}
+.pw-vp-header .pw-vp-modes .pw-seg-btn {
+  flex: none;
+  padding: 0 9px;
+}
+.pw-vp-header .pw-vp-preview {
+  margin-left: 6px;
+  flex: none;
+}
+
+/* ───────── viewport overlays ───────── */
+.pw-vp-banner {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  background: rgba(15, 14, 24, 0.82);
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pw-vp-main.picking .pw-vp-banner {
+  border-color: var(--accent);
+  background: rgba(10, 80, 190, 0.7);
+}
+.pw-vp-flow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  color: var(--lime);
+  pointer-events: auto;
+  font-size: var(--fs-small);
+}
+.pw-vp-flow-x {
+  all: unset;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text-dim);
+  cursor: default;
+}
+.pw-vp-flow-x:hover {
+  background: var(--bg-hover-mid);
+  color: var(--text);
+}
+
+/* ───────── Scene tab ───────── */
+.pw-scene-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+.pw-scene-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 2px 6px;
+}
+.pw-scene-title-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pw-scene-head .pw-prop {
+  grid-template-columns: minmax(70px, 38%) minmax(0, 1fr);
+}
+.pw-scene-foot {
+  margin-top: 6px;
+}
+.pw-scene-foot .pw-prop {
+  display: block;
+}
+.pw-scene-foot .pw-prop-label {
+  display: none;
+}
+.pw-scene-foot .pw-row > * {
+  flex: 1 1 0;
+}
+.pw-model-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 5px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(140, 43, 230, 0.28);
+  color: var(--violet-text);
+  vertical-align: -1px;
+}
+.pw-panel-menu {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  margin-left: auto;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: default;
+}
+.pw-panel-menu + .pw-panel-grip {
+  margin-left: 4px;
+}
+.pw-panel-menu:hover {
+  background: var(--bg-hover-mid);
+  color: var(--text);
+}
+.pw-thumb.active {
+  border-color: var(--accent2) !important;
+  box-shadow: 0 0 0 1px var(--accent2);
+}
+
+/* ───────── config.json editor (Blender Text Editor look) ───────── */
+.pw-cfg {
+  --cfg-pad: 8px;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: #12111c;
+}
+.pw-cfg-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px;
+  background: var(--bg-header-dim);
+  border-bottom: 1px solid var(--sep);
+}
+.pw-cfg-bar .pw-btn {
+  height: 20px;
+}
+.pw-cfg-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  background: var(--bg-chip);
+}
+.pw-cfg-hint {
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.pw-cfg-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pw-cfg-gutter {
+  position: relative;
+  flex: none;
+  width: 46px;
+  overflow: hidden;
+  background: #0e0d17;
+  border-right: 1px solid var(--sep);
+  color: var(--text-disabled);
+  font: 12px/18px ui-monospace, 'DejaVu Sans Mono', Consolas, monospace;
+  text-align: right;
+}
+.pw-cfg-gutter-inner {
+  position: relative;
+  padding: var(--cfg-pad) 8px var(--cfg-pad) 0;
+}
+.pw-cfg-nums {
+  display: block;
+  white-space: pre;
+}
+.pw-cfg-gerr {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18px;
+  background: rgba(255, 31, 107, 0.3);
+}
+.pw-cfg-code {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.pw-cfg-back {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.pw-cfg-hl,
+.pw-cfg-ta {
+  margin: 0;
+  padding: var(--cfg-pad);
+  border: 0;
+  font: 12px/18px ui-monospace, 'DejaVu Sans Mono', Consolas, monospace;
+  tab-size: 2;
+  white-space: pre;
+  letter-spacing: 0;
+}
+.pw-cfg-hl {
+  position: relative;
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  color: #d9d6ee;
+  will-change: transform;
+}
+.pw-cfg-hl .c {
+  color: #7a7699;
+  font-style: italic;
+}
+.pw-cfg-hl .k {
+  color: var(--cyan);
+}
+.pw-cfg-hl .s {
+  color: var(--lime);
+}
+.pw-cfg-hl .n {
+  color: var(--accent2-bright);
+}
+.pw-cfg-hl .w {
+  color: var(--violet-text);
+}
+.pw-cfg-errline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18px;
+  background: rgba(255, 31, 107, 0.18);
+  border-bottom: 1px solid var(--accent2);
+}
+.pw-cfg-ta {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  outline: none;
+  overflow: auto;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.pw-cfg-ta::selection {
+  background: rgba(10, 108, 255, 0.5);
+  color: transparent;
+}
+.pw-cfg-msg {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 10px;
+  background: var(--bg-header-dim);
+  border-top: 1px solid var(--sep);
+  color: var(--text-dim);
+  user-select: text;
+}
+.pw-cfg-msg.ok {
+  color: var(--success);
+}
+.pw-cfg-msg.warn {
+  color: var(--warning);
+}
+.pw-cfg-msg.err {
+  color: var(--error-text);
+  background: rgba(212, 18, 79, 0.18);
+}
+
+/* ───────── wallpaper preview ───────── */
+.pw-wp-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+.pw-wp-frame {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  background: #000;
+  --wp-h: 100vh;
+}
+.pw-wp-frame .pw-vp-host {
+  position: absolute;
+  inset: 0;
+}
+.pw-wp-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #fff;
+  font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.45), 0 0 2px rgba(0, 0, 0, 0.3);
+  user-select: none;
+}
+.pw-wp-overlay[data-style='topleft'] {
+  padding: calc(var(--wp-h) * 0.06) calc(var(--wp-h) * 0.07);
+}
+.pw-wp-overlay[data-style='center'] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: calc(var(--wp-h) * 0.14);
+  text-align: center;
+}
+.pw-wp-time {
+  font-size: calc(var(--wp-h) * 0.16);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.pw-wp-date {
+  margin-top: calc(var(--wp-h) * 0.015);
+  font-size: calc(var(--wp-h) * 0.034);
+  font-weight: 400;
+  opacity: 0.92;
+}
+.pw-wp-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 24px);
+  padding: 6px 8px;
+  background: rgba(15, 14, 24, 0.9);
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  box-shadow: var(--shadow-menu);
+  backdrop-filter: blur(8px);
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 2;
+}
+.pw-wp-bar.idle {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+}
+.pw-wp-bar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  color: var(--text-dim);
+}
+.pw-wp-bar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--outline);
+}
+.pw-wp-bar .pw-btn.pulse {
+  box-shadow: 0 0 0 2px var(--accent2), 0 0 14px var(--accent2);
+  animation: pw-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes pw-pulse {
+  from {
+    box-shadow: 0 0 0 2px var(--accent2), 0 0 4px var(--accent2);
+  }
+  to {
+    box-shadow: 0 0 0 2px var(--accent2), 0 0 16px var(--accent2);
+  }
+}
+
+.pw-scene-viewrow {
+  padding: 0 2px;
+}
+.pw-scene-viewrow .pw-seg-btn {
+  padding: 0 4px;
+}
