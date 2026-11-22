@@ -1,7 +1,8 @@
 /** Minimal promise wrapper over the raw IndexedDB API (no libraries). */
 
 export const DB_NAME = 'paperwall3d';
-export const DB_VERSION = 1;
+/** v2: settings schema v2 changed the meaning of a cached analysis (rawDepth is now raw model output), so v1 analyses are dropped. */
+export const DB_VERSION = 2;
 export type StoreName = 'projects' | 'analysis';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -15,14 +16,17 @@ export function openDB(): Promise<IDBDatabase> {
       return;
     }
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
+      const tx = req.transaction;
       if (!db.objectStoreNames.contains('projects')) {
         const projects = db.createObjectStore('projects', { keyPath: 'id' });
         projects.createIndex('updatedAt', 'updatedAt');
       }
       if (!db.objectStoreNames.contains('analysis')) {
         db.createObjectStore('analysis', { keyPath: 'key' });
+      } else if (ev.oldVersion < 2 && tx) {
+        tx.objectStore('analysis').clear();
       }
     };
     req.onsuccess = () => {

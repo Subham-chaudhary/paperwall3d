@@ -36,8 +36,9 @@ export function newProjectId(): string {
 
 /** Cache key of an analysis: it is valid as long as the image and AI model choices are unchanged. */
 export function analysisKey(projectId: string, settings: Settings): string {
-  const seg = settings.segmentation.enabled ? settings.segmentation.model : 'none';
-  return `${projectId}|${settings.runtime.workingResolution}|${seg}|${settings.depth.model}`;
+  const m = settings.mask;
+  const seg = m.use_subject ? `${m.mask_model}${m.flip_avg ? '+flip' : ''}${m.refine ? '+zoom' : ''}` : 'none';
+  return `${projectId}|v2|${settings.runtime.workingResolution}|${seg}|${settings.depth.model}|${settings.depth.depth_size}`;
 }
 
 export async function saveProject(record: ProjectRecord): Promise<void> {

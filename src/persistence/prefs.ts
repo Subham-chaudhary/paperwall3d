@@ -48,13 +48,12 @@ export const DEFAULT_LAYOUT: LayoutPrefs = {
 export interface UserPrefs {
   showSplash: boolean;
   embedAssets: boolean;
-  outputWidth: number;
-  outputHeight: number;
+  /** Wallpaper preview desktop overlay position (the overlay itself is `settings.wallpaper.overlay`). */
+  overlayStyle: 'topleft' | 'center';
 }
 
 export const DEFAULT_USER_PREFS: UserPrefs = {
   showSplash: true,
   embedAssets: false,
-  outputWidth: 0,
-  outputHeight: 0,
+  overlayStyle: 'topleft',
 };
