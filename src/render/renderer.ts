@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { cloneSettings, DEFAULT_SETTINGS } from '../core/defaults';
 import type { IRenderer, PreparedScene, Presentation, RenderStats, Settings } from '../core/types';
 import { exportSceneToGLB } from './exporter';
+import { createWebGL2Context } from './glContext';
 import { buildHtmlWallpaper } from './htmlWallpaper';
 import { fitRect, type FitMode } from './layout';
 import { OrbitView } from './orbitView';
@@ -55,15 +56,18 @@ export class PaperRenderer implements IRenderer {
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.canvas = document.createElement('canvas');
+    // Falls back through simpler context attributes; throws WebGLUnavailableError with fix-it guidance.
+    const created = createWebGL2Context();
+    this.canvas = created.canvas;
     this.canvas.style.cssText = 'display:block;width:100%;height:100%;touch-action:none;outline:none';
     container.appendChild(this.canvas);
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: true,
+      context: created.gl,
+      antialias: created.attributes.antialias,
       alpha: false,
-      powerPreference: 'high-performance',
+      powerPreference: created.attributes.powerPreference,
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;

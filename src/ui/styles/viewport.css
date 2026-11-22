@@ -271,7 +271,9 @@
 }
 .pw-vp-unavailable-sub {
   color: var(--text-dim);
-  max-width: 460px;
+  max-width: 560px;
+  line-height: 1.55;
+  user-select: text;
 }
 .pw-vp-drop {
   position: absolute;

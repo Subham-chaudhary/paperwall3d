@@ -107,8 +107,18 @@ var FRAG_COMMON = __FRAG__;
 var DEG = Math.PI / 180;
 var clamp = function (v, a, b) { return Math.min(Math.max(v, a), b); };
 var canvas = document.getElementById('c');
-var gl = canvas.getContext('webgl', { alpha: false, antialias: true, premultipliedAlpha: true, powerPreference: 'high-performance' }) ||
-         canvas.getContext('experimental-webgl', { alpha: false });
+// Try nicer context attributes first, then more compatible ones (some GPU/driver combos reject antialias
+// or high-performance, e.g. Firefox/ANGLE FEATURE_FAILURE_EGL_NO_CONFIG). Fresh canvas per attempt.
+var gl = null;
+[{ antialias: true, powerPreference: 'high-performance' }, { antialias: false, powerPreference: 'default' },
+ { antialias: false, powerPreference: 'low-power' }].some(function (a) {
+  var c = document.createElement('canvas'); c.id = 'c';
+  var opts = { alpha: false, antialias: a.antialias, premultipliedAlpha: true, powerPreference: a.powerPreference, failIfMajorPerformanceCaveat: false };
+  var g = null;
+  try { g = c.getContext('webgl', opts) || c.getContext('experimental-webgl', opts); } catch (e) { g = null; }
+  if (g) { canvas.parentNode.replaceChild(c, canvas); canvas = c; gl = g; }
+  return !!g;
+});
 if (!gl) { showError('WebGL is not available here. Enable GPU acceleration in your wallpaper app or browser.'); return; }
 canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); });
 canvas.addEventListener('webglcontextrestored', function () { location.reload(); });

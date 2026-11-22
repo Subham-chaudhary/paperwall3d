@@ -518,7 +518,7 @@ export function createViewport(ctx: AppContext): ViewportParts {
     host,
     showUnavailable: (message) => {
       unavailable.hidden = false;
-      unavailable.replaceChildren(h('span', { html: iconSvg('warning', 28) }), h('div', { class: 'pw-vp-unavailable-title', text: '3D viewport unavailable' }), h('div', { class: 'pw-vp-unavailable-sub', text: message }));
+      unavailable.replaceChildren(h('span', { html: iconSvg('warning', 28) }), h('div', { class: 'pw-vp-unavailable-title', text: 'Viewport unavailable: WebGL could not start' }), h('div', { class: 'pw-vp-unavailable-sub', text: message }));
     },
   };
 }

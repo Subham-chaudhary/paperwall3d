@@ -142,7 +142,8 @@ export class App implements AppContext {
       this.renderer = createRenderer(this.shell.viewport.host);
     } catch (e) {
       const msg = errorMessage(e);
-      this.reports.error(`3D renderer failed to start: ${msg}`, e);
+      const noWebGL = e instanceof Error && e.name === 'WebGLUnavailableError';
+      this.reports.error(noWebGL ? 'WebGL is unavailable in this browser. See the viewport for how to fix it.' : `3D renderer failed to start: ${msg}`, e);
       this.shell.viewport.showUnavailable(msg);
     }
 
