@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [2.1.1] - 2026-11-22
+
+### Changed
+- **Properties grouped by what you adjust first.** The panels are now Motion, Depth & Layers, 1 · Subject Mask, 2 · Depth Map, 3D Camera, Wallpaper & Export, then Processing. Each panel shows its essentials. Expert options move into collapsed sub-panels: Detection and Cleanup for the mask, Range and Model for depth, Mesh for 3D, Viewport for processing. Stored settings keys are unchanged, so config.json stays 2.5dwallpp-compatible.
+- **Clearer labels.** Parallax strength, Cursor smoothing, Depth applies to, Mask model, Depth model and Depth smoothing σ replace the ambiguous "Strength", the two "Smoothing" and the two "Model" labels.
+- **Readouts use fixed decimals** taken from each slider's step, so values no longer jitter while dragging.
+- **Actions moved next to the settings they use.** Download .glb is in 3D Camera, and Save Live Wallpaper is in Wallpaper & Export. The Wallpaper tab is gone; its settings live in Wallpaper & Export.
+
+### Added
+- **Inactive settings are greyed out**, with the reason in the tooltip. Examples: mask options while Separate object is off, Background plane depth and Object relief when depth applies to the whole image.
+- **Per-panel Reset to defaults** (one undo step).
+- **An inspect (eye) toggle** on the Subject Mask and Depth Map panels shows that stage in the 2D view.
+- **F3 finds settings** and jumps to them. Tooltips show where each setting lives, e.g. "Motion ▸ Parallax strength".
+
 ## [2.1.0] - 2026-11-22
 
 ### Added

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.1.0-0a6cff">
+  <img alt="version" src="https://img.shields.io/badge/version-2.1.1-0a6cff">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-ff1f6b">
   <img alt="runs" src="https://img.shields.io/badge/runs-100%25%20client--side-e6ff3b?labelColor=14104a">
   <img alt="netlify" src="https://img.shields.io/badge/deploy-Netlify-00d6f0?labelColor=14104a">
@@ -54,7 +54,7 @@ The list icon on the **Parallax** panel header (and *Open Image as Portrait / Pr
 
 ## Features
 
-- **Blender-style UI.** Dark theme, top bar with menus and workspaces (Layout, 1 · Mask, 2 · Depth, 3D Camera, Config, Export), a viewport header with the **2D Parallax | 3D Camera | config.json** switch, a **Show Stage** menu, **Pick Object** and **Preview Wallpaper**, an outliner, a properties editor that mirrors 2.5dwallpp's settings panel, an image strip with the pipeline layers, and a status bar with job progress.
+- **Blender-style UI.** Dark theme, top bar with menus and workspaces (Layout, 1 · Mask, 2 · Depth, 3D Camera, Config, Export), a viewport header with the **2D Parallax | 3D Camera | config.json** switch, a **Show Stage** menu, **Pick Object** and **Preview Wallpaper**, an outliner, a properties editor grouped by what you adjust first (Motion, Depth & Layers, 1 · Subject Mask, 2 · Depth Map, 3D Camera, Wallpaper & Export, Processing), with advanced options in collapsed sub-panels, per-panel reset and inactive settings greyed out, an image strip with the pipeline layers, and a status bar with job progress.
 - **Stages.** *Result*, *1 · Main object mask*, *2 · Object depth (masked)* and *Whole-image depth*, from the header, the outliner, the image strip or the **Z pie menu**.
 - **Pick Object (P).** Shows the untilted original; click the object you want. Esc cancels, the x clears the pick.
 - **config.json editor.** The 2.5dwallpp-compatible document (sections `parallax`, `layers`, `mask`, `depth`, `camera3d`) with a `//` comment above every key (range, step, options, default). Edits apply live. `//` comments, trailing commas and flat keys are accepted, out-of-range values are clamped and reported by path, and syntax errors show line and column. **Copy** keeps the comments, **Download** writes plain JSON, **Defaults** resets.
