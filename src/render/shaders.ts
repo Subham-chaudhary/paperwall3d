@@ -73,7 +73,7 @@ void main() {
 #ifdef IS_FOREGROUND
     col = vec3(1.0);
 #else
-    col = vec3(0.004);
+    col = vec3(0.0033, 0.003, 0.006);
 #endif
   } else if (uMode > 0.5) {
     // Depth view: near = warm, far = cool. Colormap is sRGB -> convert to linear working space.

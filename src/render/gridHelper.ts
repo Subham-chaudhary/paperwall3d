@@ -32,7 +32,7 @@ export function createGridHelper(): THREE.LineSegments {
   for (let i = -lines; i <= lines; i++) {
     if (i === 0) continue;
     const major = i % MAJOR_EVERY === 0;
-    const color = major ? '#9a9a9a' : '#7a7a7a';
+    const color = major ? '#8580b8' : '#5f5b8c';
     const alpha = major ? 0.9 : 0.6;
     const t = i * STEP;
     push(-HALF, t, HALF, t, color, alpha);

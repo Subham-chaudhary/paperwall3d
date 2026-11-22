@@ -6,20 +6,39 @@ import { icon, iconSvg, type IconName } from './icons';
 import { userPrefs } from './userprefs';
 import { checkbox } from './widgets/controls';
 
+/**
+ * Hero banner: the logo artwork (three stacked photo cards with long diagonal shadows) redrawn as
+ * separate parallax layers on black. Coordinates are the logo's own card space, cropped to the banner.
+ */
 const BANNER_SVG = `
-<svg class="pw-splash-art" viewBox="0 0 640 210" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<svg class="pw-splash-art" viewBox="-600 110 1600 546" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <defs>
-    <linearGradient id="pwSky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1b2a4a"/><stop offset=".55" stop-color="#3b4f86"/><stop offset="1" stop-color="#d98a5b"/>
-    </linearGradient>
-    <filter id="pwShadow" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000" flood-opacity=".5"/></filter>
+    <clipPath id="pwCardPink"><rect x="258" y="328" width="702" height="592" rx="30"/></clipPath>
+    <clipPath id="pwCardLime"><rect x="158" y="228" width="707" height="592" rx="30"/></clipPath>
+    <clipPath id="pwCardBlue"><rect x="65" y="128" width="703" height="587" rx="30"/></clipPath>
   </defs>
-  <rect width="640" height="210" fill="url(#pwSky)"/>
-  <g class="pw-parallax" data-depth="2"><circle cx="470" cy="70" r="30" fill="#ffd9a0" opacity=".95"/><circle cx="470" cy="70" r="46" fill="#ffd9a0" opacity=".16"/></g>
-  <g class="pw-parallax" data-depth="5" filter="url(#pwShadow)"><path d="M-20 150 L90 92 L170 128 L270 70 L380 130 L470 96 L560 140 L660 100 L660 230 L-20 230Z" fill="#5a6fae"/></g>
-  <g class="pw-parallax" data-depth="9" filter="url(#pwShadow)"><path d="M-20 175 L60 138 L150 168 L250 122 L340 170 L450 130 L560 176 L660 146 L660 230 L-20 230Z" fill="#3b5894"/></g>
-  <g class="pw-parallax" data-depth="15" filter="url(#pwShadow)"><path d="M-20 200 L110 168 L230 196 L340 160 L470 200 L660 170 L660 230 L-20 230Z" fill="#26416f"/></g>
-  <g class="pw-parallax" data-depth="24" filter="url(#pwShadow)"><path d="M300 210 C300 150 340 120 372 96 C380 130 410 140 432 150 C412 160 406 188 430 210Z" fill="#ffa033"/><path d="M372 96 C376 130 372 170 366 210" stroke="#c4701a" stroke-width="2" fill="none"/></g>
+  <g class="pw-parallax" data-depth="6"><g clip-path="url(#pwCardPink)">
+    <path fill="#ff1f6b" d="M258 328h702v592H258z"/>
+    <path d="M500 697h365l95 95v128H600l-80-100-20-25Z" fill="#9a0b36"/>
+    <path d="m608 440 354.459 348.312L960 920H860L608 666z" fill="#6a0722"/>
+  </g></g>
+  <g class="pw-parallax" data-depth="13"><g clip-path="url(#pwCardLime)">
+    <path fill="#e6ff3b" d="M158 228h707v592H158z"/>
+    <path d="M423.548 701H869l-4-4v123H520z" fill="#ff8a2b"/>
+    <path d="m512 344 354.639 350.132L865 820l-104.105.276L512 570z" fill="#7b2ee0"/>
+  </g></g>
+  <g class="pw-parallax" data-depth="22"><g clip-path="url(#pwCardBlue)">
+    <path fill="#0a6cff" d="M65 128h703v587H65z"/>
+    <circle cx="603" cy="285" r="58" fill="#ff3c9e"/>
+    <path d="m345 530 121-25 89-75q15-14 29 0l184 170v115H345Z" fill="#14104a"/>
+    <path d="M578.802 428.116 640 520l-11 29 83 166h56l.12-117.522-183.922-170.736c-5.378-4.485-7.757-2.202-5.396 1.374" fill="#00d6f0"/>
+    <path d="M462.833 507.311 555 430q15-14 29 0l184 170" fill="none" stroke="#2fe6ff" stroke-width="5" stroke-linejoin="round"/>
+    <path d="m65 535 203-173q12-12 24 0l78 108 25 62h-50l35 83 55 100H65Z" fill="#3d0d5e"/>
+    <path d="m65 535 203-173q12-12 24 0" fill="none" stroke="#e61ee8" stroke-width="5" stroke-linejoin="round"/>
+    <path d="m437 495 218 220h-17l-98-83-58-17 8-8 37 3Z" fill="#e61ee8"/>
+    <path d="m312.282 391.323 130.805 100.131L527 610l13 22-58-17 8-8-95-75-25-62z" fill="#8c2be6"/>
+    <path d="M266.079 361.129c8.667-10 23.254-10.796 35.921-4.129l160 146 195.739 213.541L646.206 715 437 495l-115-95z" fill="#e61ee8"/>
+  </g></g>
 </svg>`;
 
 let activeClose: (() => void) | null = null;
@@ -52,7 +71,7 @@ export function openSplash(ctx: AppContext): void {
   // Parallax banner reacting to the cursor.
   const banner = h('div', { class: 'pw-splash-banner', html: BANNER_SVG });
   banner.append(
-    h('div', { class: 'pw-splash-title' }, h('span', { class: 'pw-splash-logo', html: iconSvg('logo', 34) }), h('span', { text: APP_NAME })),
+    h('div', { class: 'pw-splash-title' }, h('span', { class: 'pw-splash-logo', html: iconSvg('logo', 40) }), h('span', { text: APP_NAME })),
     h('div', { class: 'pw-splash-version', text: APP_VERSION }),
   );
   banner.addEventListener('pointermove', (e) => {

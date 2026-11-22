@@ -1,6 +1,7 @@
 /**
  * Procedural placeholder scene shown before the user loads an image:
- * a dusk landscape (gradient sky, sun, layered hills) with a lone tree as the foreground subject.
+ * the logo's world: electric-blue sky, hot-pink sun, neon-edged purple/navy mountain layers and a lone
+ * pink tree on a dark mound as the foreground subject.
  * Everything is drawn with Canvas2D (source, background-without-subject, subject, depth) so it
  * takes a few tens of milliseconds and needs no assets.
  */
@@ -32,18 +33,26 @@ interface Hill {
   phase: number;
   top: string;
   bottom: string;
+  /** Thin neon highlight traced along the ridge line. */
+  rim: string;
   depth: number;
 }
 
 const HILLS: Hill[] = [
-  { base: 0.5, amp: 0.05, freq: 1.3, phase: 0.4, top: '#6b4f8a', bottom: '#8a5f8e', depth: 0.12 },
-  { base: 0.58, amp: 0.06, freq: 1.9, phase: 2.1, top: '#4f3f7a', bottom: '#6f4a80', depth: 0.24 },
-  { base: 0.68, amp: 0.07, freq: 1.1, phase: 4.0, top: '#3a2f66', bottom: '#4f3a70', depth: 0.38 },
-  { base: 0.79, amp: 0.05, freq: 2.3, phase: 1.2, top: '#271f4c', bottom: '#33275a', depth: 0.52 },
+  { base: 0.5, amp: 0.05, freq: 1.3, phase: 0.4, top: '#8c2be6', bottom: '#6d1fc0', rim: '#2fe6ff', depth: 0.12 },
+  { base: 0.58, amp: 0.06, freq: 1.9, phase: 2.1, top: '#14104a', bottom: '#0d0a33', rim: '#2fe6ff', depth: 0.24 },
+  { base: 0.68, amp: 0.07, freq: 1.1, phase: 4.0, top: '#3d0d5e', bottom: '#2c0846', rim: '#e61ee8', depth: 0.38 },
+  { base: 0.79, amp: 0.05, freq: 2.3, phase: 1.2, top: '#1d0a3d', bottom: '#14104a', rim: '#e61ee8', depth: 0.52 },
 ];
 
 function ridge(h: Hill, nx: number): number {
   return (h.base + h.amp * Math.sin(nx * Math.PI * 2 * h.freq + h.phase) + h.amp * 0.45 * Math.sin(nx * Math.PI * 7.3 + h.phase * 1.7)) * H;
+}
+
+function ridgePath(ctx: Ctx, h: Hill): void {
+  ctx.beginPath();
+  ctx.moveTo(0, ridge(h, 0));
+  for (let x = 4; x <= W; x += 4) ctx.lineTo(x, ridge(h, x / W));
 }
 
 function hillPath(ctx: Ctx, h: Hill): void {
@@ -60,37 +69,24 @@ function drawBackdrop(ctx: Ctx, depthMode: boolean): void {
     ctx.fillStyle = gray(0);
     ctx.fillRect(0, 0, W, H);
   } else {
+    // Electric-blue sky with a gentle vertical variation.
     const sky = ctx.createLinearGradient(0, 0, 0, H * 0.62);
-    sky.addColorStop(0, '#1b1b4a');
-    sky.addColorStop(0.45, '#7a3f7e');
-    sky.addColorStop(0.8, '#f08a6a');
-    sky.addColorStop(1, '#ffd08a');
+    sky.addColorStop(0, '#0750d6');
+    sky.addColorStop(0.55, '#0a6cff');
+    sky.addColorStop(1, '#2f8fff');
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
-    // Stars.
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    let seed = 7;
-    for (let i = 0; i < 70; i++) {
-      seed = (seed * 16807) % 2147483647;
-      const x = (seed / 2147483647) * W;
-      seed = (seed * 16807) % 2147483647;
-      const y = (seed / 2147483647) * H * 0.3;
-      ctx.fillRect(x, y, 1.5, 1.5);
-    }
-
-    // Sun glow + disc.
+    // Flat hot-pink sun with a faint halo ring.
     const sx = W * 0.68;
-    const sy = H * 0.46;
-    const glow = ctx.createRadialGradient(sx, sy, 10, sx, sy, 230);
-    glow.addColorStop(0, 'rgba(255,230,160,0.9)');
-    glow.addColorStop(0.35, 'rgba(255,170,110,0.35)');
-    glow.addColorStop(1, 'rgba(255,140,100,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#fff2c9';
+    const sy = H * 0.33;
+    ctx.fillStyle = 'rgba(255,60,158,0.16)';
     ctx.beginPath();
-    ctx.arc(sx, sy, 46, 0, Math.PI * 2);
+    ctx.arc(sx, sy, 74, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ff3c9e';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 52, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -109,6 +105,13 @@ function drawBackdrop(ctx: Ctx, depthMode: boolean): void {
       ctx.fillStyle = g;
     }
     ctx.fill();
+    if (!depthMode) {
+      ridgePath(ctx, h);
+      ctx.strokeStyle = h.rim;
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
   }
 }
 
@@ -128,11 +131,18 @@ function drawSubject(ctx: Ctx, depthMode: boolean): void {
     ctx.fillStyle = g;
   } else {
     const g = ctx.createLinearGradient(0, groundY - 62, 0, groundY);
-    g.addColorStop(0, '#2f4a3a');
-    g.addColorStop(1, '#16261f');
+    g.addColorStop(0, '#1a0a3a');
+    g.addColorStop(1, '#0a0620');
     ctx.fillStyle = g;
   }
   ctx.fill();
+  if (!depthMode) {
+    ctx.beginPath();
+    ctx.ellipse(cx, groundY, 210, 62, 0, Math.PI * 1.04, Math.PI * 1.96);
+    ctx.strokeStyle = '#e61ee8';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
 
   // Trunk.
   ctx.beginPath();
@@ -141,7 +151,7 @@ function drawSubject(ctx: Ctx, depthMode: boolean): void {
   ctx.lineTo(cx + 26, groundY - 200);
   ctx.quadraticCurveTo(cx + 10, groundY - 120, cx + 20, groundY - 8);
   ctx.closePath();
-  ctx.fillStyle = depthMode ? gray(0.8) : '#3a2a2a';
+  ctx.fillStyle = depthMode ? gray(0.8) : '#6a0722';
   ctx.fill();
 
   // Canopy: overlapping spheres, lit from the sun side.
@@ -157,9 +167,9 @@ function drawSubject(ctx: Ctx, depthMode: boolean): void {
       g.addColorStop(0, gray(1));
       g.addColorStop(1, gray(0.72));
     } else {
-      g.addColorStop(0, '#f2a15a');
-      g.addColorStop(0.45, '#b8553f');
-      g.addColorStop(1, '#4a1f3c');
+      g.addColorStop(0, '#ff3c9e');
+      g.addColorStop(0.45, '#ff1f6b');
+      g.addColorStop(1, '#9a0b36');
     }
     ctx.fillStyle = g;
     ctx.beginPath();

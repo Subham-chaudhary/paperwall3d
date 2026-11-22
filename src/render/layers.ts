@@ -48,7 +48,7 @@ export class SceneLayers {
     this.background = new DisplacementLayer(
       { kind: 'background', width: scene.width, height: scene.height, depth: bgDepth, mask: scene.mask, centroid },
       bgMat,
-      0x8a8a8a,
+      0x6b5fa8,
     );
     this.group.add(this.background.object);
 
@@ -60,7 +60,7 @@ export class SceneLayers {
       this.foreground = new DisplacementLayer(
         { kind: 'foreground', width: scene.width, height: scene.height, depth: scene.depth, mask: scene.mask, centroid },
         fgMat,
-        0xf08a24,
+        0xff3c9e,
       );
       this.group.add(this.foreground.object);
     } else {
