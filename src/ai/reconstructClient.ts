@@ -7,20 +7,12 @@
  * - If workers are unavailable the same code runs inline on the main thread.
  */
 import type { PreparedScene, RawAnalysis, Settings, SourceImage } from '../core/types';
+import { getImageAlpha } from './imageLoader';
 import type { ReconstructRequest, ReconstructResponse } from '../imaging/reconstruct.protocol';
 import { Reconstructor, type ReconstructOutput, type ReconstructParams } from '../imaging/reconstructor';
 
-/**
- * A PreparedScene plus the background-layer depth (foreground region filled from its surroundings).
- * Renderers that know about the extra field can displace the background mesh with it to avoid a
- * foreground-shaped bump behind the subject; others can ignore it.
- */
-export interface PreparedSceneEx extends PreparedScene {
-  backgroundDepth: Float32Array;
-}
-
 interface Waiter {
-  resolve: (scene: PreparedSceneEx) => void;
+  resolve: (scene: PreparedScene) => void;
   reject: (err: unknown) => void;
 }
 
@@ -31,8 +23,9 @@ interface Job {
   waiters: Waiter[];
 }
 
+/** Snapshot of the settings that affect reconstruction (the store mutates its objects in place). */
 function pickParams(s: Settings): ReconstructParams {
-  return { segmentation: s.segmentation, depth: s.depth, reconstruction: s.reconstruction };
+  return { mask: { ...s.mask, click: s.mask.click ? [s.mask.click[0], s.mask.click[1]] : null }, depth: { ...s.depth } };
 }
 
 export class ReconstructClient {
@@ -60,8 +53,8 @@ export class ReconstructClient {
     }
   }
 
-  reconstruct(source: SourceImage, raw: RawAnalysis, settings: Settings): Promise<PreparedSceneEx> {
-    return new Promise<PreparedSceneEx>((resolve, reject) => {
+  reconstruct(source: SourceImage, raw: RawAnalysis, settings: Settings): Promise<PreparedScene> {
+    return new Promise<PreparedScene>((resolve, reject) => {
       const params = pickParams(settings);
       const tail = this.queue[this.queue.length - 1];
       if (tail && tail.source === source && tail.raw === raw) {
@@ -101,7 +94,7 @@ export class ReconstructClient {
     try {
       for (let job = this.queue.shift(); job; job = this.queue.shift()) {
         try {
-          let scene: PreparedSceneEx;
+          let scene: PreparedScene;
           try {
             scene = await this.execute(job);
           } catch (err) {
@@ -119,7 +112,7 @@ export class ReconstructClient {
     }
   }
 
-  private async execute(job: Job): Promise<PreparedSceneEx> {
+  private async execute(job: Job): Promise<PreparedScene> {
     const { source, raw } = job;
     if (!this.installed || this.installed.source !== source || this.installed.raw !== raw) {
       const inputs = {
@@ -128,7 +121,8 @@ export class ReconstructClient {
         source: source.pixels.data,
         rawMask: raw.rawMask,
         rawDepth: raw.rawDepth,
-        hasSegmentation: raw.segmentationModel !== null,
+        // An image's own alpha stands in for the masker (segmentationModel stays null).
+        hasSegmentation: raw.segmentationModel !== null || getImageAlpha(source) !== undefined,
       };
       if (this.inline) {
         this.inline.setInputs(inputs);
@@ -159,17 +153,22 @@ export class ReconstructClient {
   }
 }
 
-function toScene(source: SourceImage, out: ReconstructOutput): PreparedSceneEx {
+function toScene(source: SourceImage, out: ReconstructOutput): PreparedScene {
   const { width, height } = out;
+  const image = (data: Uint8ClampedArray): ImageData => new ImageData(data as Uint8ClampedArray<ArrayBuffer>, width, height);
   return {
     width,
     height,
     source: source.pixels,
     mask: out.mask,
     depth: out.depth,
-    backgroundDepth: out.backgroundDepth,
-    background: new ImageData(out.background as Uint8ClampedArray<ArrayBuffer>, width, height),
-    foreground: new ImageData(out.foreground as Uint8ClampedArray<ArrayBuffer>, width, height),
+    bgColor: image(out.bgColor),
+    bgDepth: out.bgDepth,
+    fg: image(out.fg),
+    fgDepth: out.fgDepth,
+    objDepth: out.objDepth,
+    center: out.center,
+    coverage: out.coverage,
     hasForeground: out.hasForeground,
     timings: out.timings,
   };

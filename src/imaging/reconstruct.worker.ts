@@ -23,9 +23,11 @@ ctx.onmessage = (ev: MessageEvent<ReconstructRequest>) => {
       reply({ type: 'result', id: req.id, output }, [
         output.mask.buffer,
         output.depth.buffer,
-        output.backgroundDepth.buffer,
-        output.background.buffer,
-        output.foreground.buffer,
+        output.bgColor.buffer,
+        output.bgDepth.buffer,
+        output.fg.buffer,
+        output.fgDepth.buffer,
+        output.objDepth.buffer,
       ]);
     }
   } catch (err) {

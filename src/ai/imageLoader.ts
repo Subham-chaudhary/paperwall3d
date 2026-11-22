@@ -50,10 +50,10 @@ function makeCanvas(w: number, h: number): { canvas: Canvas2D; ctx: Ctx2D } {
 }
 
 /**
- * Draws `src` into a w x h canvas on a neutral background (so transparent PNGs get a defined colour).
+ * Draws `src` into a w x h canvas, over `background` when given (null keeps transparency).
  * Large reductions go through successive halvings, which keeps detail much better than one big step.
  */
-function drawScaled(src: ImageBitmap, w: number, h: number): Ctx2D {
+function drawScaled(src: ImageBitmap, w: number, h: number, background: string | null): Ctx2D {
   let cur: CanvasImageSource = src;
   let cw = src.width;
   let ch = src.height;
@@ -67,10 +67,33 @@ function drawScaled(src: ImageBitmap, w: number, h: number): Ctx2D {
     ch = nh;
   }
   const out = makeCanvas(w, h);
-  out.ctx.fillStyle = '#808080';
-  out.ctx.fillRect(0, 0, w, h);
+  if (background) {
+    out.ctx.fillStyle = background;
+    out.ctx.fillRect(0, 0, w, h);
+  }
   out.ctx.drawImage(cur, 0, 0, w, h);
   return out.ctx;
+}
+
+/** Alpha channels of loaded images (0..1 at working resolution), only for images with meaningful transparency. */
+const imageAlpha = new WeakMap<SourceImage, Float32Array>();
+
+/** The image's own transparency as an object probability map, or undefined when it has none worth using. */
+export function getImageAlpha(source: SourceImage): Float32Array | undefined {
+  return imageAlpha.get(source);
+}
+
+/** More than this fraction of pixels with alpha < 250 counts as a meaningful alpha channel. */
+const ALPHA_MIN_FRACTION = 0.005;
+
+function extractAlpha(rgba: Uint8ClampedArray): Float32Array | null {
+  const n = rgba.length / 4;
+  let translucent = 0;
+  for (let i = 0; i < n; i++) if (rgba[i * 4 + 3]! < 250) translucent++;
+  if (translucent <= n * ALPHA_MIN_FRACTION) return null;
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = rgba[i * 4 + 3]! / 255;
+  return out;
 }
 
 export async function loadSourceImage(file: Blob, name: string, workingResolution: number): Promise<SourceImage> {
@@ -98,9 +121,13 @@ export async function loadSourceImage(file: Blob, name: string, workingResolutio
     const scale = Math.min(1, workingResolution / Math.max(ow, oh));
     const w = Math.max(1, Math.round(ow * scale));
     const h = Math.max(1, Math.round(oh * scale));
-    const ctx = drawScaled(bitmap, w, h);
+    // Transparent images: composite over white (as 2.5dwallpp does) and remember a meaningful alpha channel.
+    const alpha = format === 'jpeg' ? null : extractAlpha(drawScaled(bitmap, w, h, null).getImageData(0, 0, w, h).data);
+    const ctx = drawScaled(bitmap, w, h, '#ffffff');
     const pixels = ctx.getImageData(0, 0, w, h);
-    return { name, originalWidth: ow, originalHeight: oh, width: w, height: h, pixels, blob: file };
+    const image: SourceImage = { name, originalWidth: ow, originalHeight: oh, width: w, height: h, pixels, blob: file };
+    if (alpha) imageAlpha.set(image, alpha);
+    return image;
   } finally {
     bitmap.close();
   }

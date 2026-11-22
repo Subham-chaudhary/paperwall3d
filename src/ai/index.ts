@@ -16,5 +16,3 @@ import { Pipeline } from './pipeline';
 export function createPipeline(): IPipeline {
   return new Pipeline();
 }
-
-export type { PreparedSceneEx } from './reconstructClient';

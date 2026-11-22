@@ -45,8 +45,6 @@ export interface DepthModelSpec {
   label: string;
   /** Preferred file per backend: fp16 for WebGPU, int8-quantized for WASM (CPU has no fast fp16 path). */
   files: Record<ModelBackend, ModelFile>;
-  /** Long edge of the network input; the short edge keeps the aspect ratio. */
-  inputLongEdge: number;
   /** Both input dimensions are rounded to a multiple of this (ViT patch size). */
   multipleOf: number;
   mean: readonly [number, number, number];
@@ -114,7 +112,6 @@ const DEPTH: Record<Exclude<DepthModelId, 'heuristic'>, DepthModelSpec> = {
         sizeBytes: 27_258_801,
       },
     },
-    inputLongEdge: 518,
     multipleOf: 14,
     mean: IMAGENET_MEAN,
     std: IMAGENET_STD,

@@ -2,7 +2,6 @@
  * O(1)-per-pixel blurs: running-sum box blur (edge-clamped) and a 3-pass box approximation of a Gaussian.
  * All functions work on interleaved Float32 data with an arbitrary channel count.
  */
-import { resample } from './resample';
 
 /** Edge-clamped box blur with window (2r+1)×(2r+1). Returns a new array. */
 export function boxBlur(src: Float32Array, w: number, h: number, r: number, channels = 1): Float32Array {
@@ -76,37 +75,4 @@ export function gaussianBlur(src: Float32Array, w: number, h: number, sigma: num
   let cur = src;
   for (const r of radii) cur = boxBlur(cur, w, h, r, channels);
   return cur;
-}
-
-/** Normalised convolution: blur(values·weights) / blur(weights). Where the weight sum vanishes, `fallback` is used. */
-export function weightedBlur(
-  values: Float32Array,
-  weights: Float32Array,
-  w: number,
-  h: number,
-  r: number,
-  fallback: number,
-): Float32Array {
-  const n = w * h;
-  const num = new Float32Array(n);
-  for (let i = 0; i < n; i++) num[i] = values[i]! * weights[i]!;
-  const bn = boxBlur(num, w, h, r);
-  const bd = boxBlur(weights, w, h, r);
-  for (let i = 0; i < n; i++) {
-    const d = bd[i]!;
-    bn[i] = d > 1e-5 ? bn[i]! / d : fallback;
-  }
-  return bn;
-}
-
-/**
- * Gaussian blur for smooth data (e.g. synthesised fills) where speed matters more than texture: for
- * sigma >= 3 it blurs at half resolution and upsamples, ~2x faster than the full-resolution blur.
- */
-export function gaussianBlurSmooth(src: Float32Array, w: number, h: number, sigma: number, channels = 1): Float32Array {
-  if (sigma < 3 || w < 8 || h < 8) return gaussianBlur(src, w, h, sigma, channels);
-  const hw = Math.ceil(w / 2);
-  const hh = Math.ceil(h / 2);
-  const small = resample(src, w, h, hw, hh, channels);
-  return resample(gaussianBlur(small, hw, hh, sigma / 2, channels), hw, hh, w, h, channels);
 }

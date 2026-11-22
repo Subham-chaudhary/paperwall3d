@@ -13,7 +13,7 @@ import { detectWebGpu } from '../backend';
 import { postprocessDepth, prepareDepthInput } from '../depth';
 import { ModelDownloadError } from '../modelCache';
 import { formatMB, getDepthSpec, getSegmentationSpec, type ModelFile } from '../models';
-import { postprocessSegmentation, prepareSegmentationInput } from '../segmentation';
+import { predictMask, type SegmentationRunner } from '../segmentation';
 import type { AnalyzeRequest, AnalyzeResult, InferenceRequest, InferenceResponse } from './protocol';
 import { loadOrt, SessionPool, tensorToFloat32, type ExecutionProvider, type OrtSession } from './ortRuntime';
 
@@ -187,7 +187,8 @@ async function analyze(req: AnalyzeRequest, signal: AbortSignal, check: () => vo
   let segUsed: SegmentationModelId | null = null;
   let segBackend: ExecutionProvider | null = null;
   if (req.segmentation) {
-    const spec = getSegmentationSpec(req.segmentation);
+    const seg = req.segmentation;
+    const spec = getSegmentationSpec(seg.model);
     try {
       const out = await withSession(
         'segmentation',
@@ -201,12 +202,20 @@ async function analyze(req: AnalyzeRequest, signal: AbortSignal, check: () => vo
         async (session) => {
           progress({ stage: 'segmentation', progress: -1, message: `Segmenting subject — ${spec.label}` });
           const t = nowMs();
-          const input = prepareSegmentationInput(pixels, w, h, spec);
-          const tensor = new ort.Tensor('float32', input, [1, 3, spec.inputSize, spec.inputSize]);
-          const outputs = await session.run({ [session.inputNames[0]!]: tensor });
-          const first = outputs[session.outputNames[0]!];
-          if (!first) throw new Error('Segmentation model returned no output');
-          const mask = postprocessSegmentation(tensorToFloat32(first), spec, w, h);
+          const inputName = session.inputNames[0]!;
+          const run: SegmentationRunner = async (input) => {
+            check();
+            const tensor = new ort.Tensor('float32', input, [1, 3, spec.inputSize, spec.inputSize]);
+            const outputs = await session.run({ [inputName]: tensor });
+            const first = outputs[session.outputNames[0]!];
+            if (!first) throw new Error('Segmentation model returned no output');
+            return tensorToFloat32(first);
+          };
+          const mask = await predictMask(pixels, w, h, spec, run, {
+            flipAvg: seg.flipAvg,
+            refine: seg.refine,
+            onPass: (label) => progress({ stage: 'segmentation', progress: -1, message: `Segmenting subject (${label}) — ${spec.label}` }),
+          });
           timings.segmentation = round1(nowMs() - t);
           return mask;
         },
@@ -229,10 +238,11 @@ async function analyze(req: AnalyzeRequest, signal: AbortSignal, check: () => vo
 
   // ── Depth ─────────────────────────────────────────────────────
   let rawDepth: Float32Array | null = null;
-  let depthUsed: DepthModelId | null = req.depth;
+  let depthUsed: DepthModelId | null = req.depth?.model ?? null;
   let depthBackend: ExecutionProvider | null = null;
-  if (req.depth !== null && req.depth !== 'heuristic') {
-    const spec = getDepthSpec(req.depth);
+  if (req.depth && req.depth.model !== 'heuristic') {
+    const depthJob = req.depth;
+    const spec = getDepthSpec(req.depth.model);
     try {
       const out = await withSession(
         'depth',
@@ -246,7 +256,7 @@ async function analyze(req: AnalyzeRequest, signal: AbortSignal, check: () => vo
         async (session, backend) => {
           progress({ stage: 'depth', progress: -1, message: `Estimating depth — ${spec.label}` });
           const t = nowMs();
-          const input = prepareDepthInput(pixels, w, h, spec);
+          const input = prepareDepthInput(pixels, w, h, depthJob.size, spec);
           const tensor = new ort.Tensor('float32', input.data, [1, 3, input.height, input.width]);
           const outputs = await session.run({ [session.inputNames[0]!]: tensor });
           const first = outputs[session.outputNames[0]!];
@@ -279,7 +289,7 @@ async function analyze(req: AnalyzeRequest, signal: AbortSignal, check: () => vo
       });
     }
   }
-  if (!rawDepth && req.depth !== null) {
+  if (!rawDepth && req.depth) {
     check();
     const t = nowMs();
     rawDepth = heuristicDepth(pixels, w, h);

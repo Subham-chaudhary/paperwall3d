@@ -1,14 +1,14 @@
 /** Main-thread handle to the inference worker: one request at a time, with cancellation. */
-import type { Backend, DepthModelId, PipelineProgress, SegmentationModelId } from '../core/types';
-import type { AnalyzeResult, InferenceRequest, InferenceResponse } from './worker/protocol';
+import type { Backend, PipelineProgress } from '../core/types';
+import type { AnalyzeResult, DepthJob, InferenceRequest, InferenceResponse, SegmentationJob } from './worker/protocol';
 
 export interface AnalyzeJob {
   width: number;
   height: number;
   /** Working-resolution RGBA. It is copied before being sent. */
   pixels: Uint8ClampedArray;
-  segmentation: SegmentationModelId | null;
-  depth: DepthModelId | null;
+  segmentation: SegmentationJob | null;
+  depth: DepthJob | null;
   backend: Backend;
 }
 

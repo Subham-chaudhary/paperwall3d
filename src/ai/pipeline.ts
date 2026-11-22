@@ -2,8 +2,8 @@
  * Pipeline facade implementing IPipeline.
  *
  * analyze():     expensive, runs in the inference worker; results are cached per component
- *                (mask per image+seg model, depth per image+depth model+backend) so toggling settings back and
- *                forth never repeats inference.
+ *                (mask per image + (mask_model, flip_avg, refine), depth per image + (depth model, depth_size, backend))
+ *                so toggling settings back and forth never repeats inference.
  * reconstruct(): cheap, runs in the reconstruct worker (see reconstructClient.ts).
  */
 import { Emitter } from '../core/events';
@@ -13,16 +13,18 @@ import type {
   IPipeline,
   ModelCacheEntry,
   PipelineProgress,
+  PreparedScene,
   RawAnalysis,
   SegmentationModelId,
   Settings,
   SourceImage,
 } from '../core/types';
 import { probeBackend } from './backend';
-import { loadSourceImage } from './imageLoader';
+import { getImageAlpha, loadSourceImage } from './imageLoader';
 import { abortError, InferenceClient } from './inferenceClient';
+import type { DepthJob, SegmentationJob } from './worker/protocol';
 import { clearModelCache, listModels } from './modelCache';
-import { ReconstructClient, type PreparedSceneEx } from './reconstructClient';
+import { ReconstructClient } from './reconstructClient';
 
 interface MaskEntry {
   mask: Float32Array;
@@ -114,12 +116,20 @@ export class Pipeline implements IPipeline {
     const t0 = performance.now();
     const id = this.imageId(source);
     const { width: w, height: h } = source;
-    const segModel: SegmentationModelId | null = settings.segmentation.enabled ? settings.segmentation.model : null;
-    const depthModel = settings.depth.model;
+    const m = settings.mask;
+    // A meaningful alpha channel in the image replaces the masker.
+    const alpha = m.use_subject ? getImageAlpha(source) : undefined;
+    const segJob: SegmentationJob | null = m.use_subject && !alpha
+      ? { model: m.mask_model, flipAvg: m.flip_avg, refine: m.refine }
+      : null;
+    const depthJob: DepthJob = { model: settings.depth.model, size: Math.round(settings.depth.depth_size) };
     const backend = settings.runtime.backend;
 
-    const maskKey = `${id}|${segModel ?? 'off'}`;
-    const depthKey = `${id}|${depthModel}|${backend}`;
+    // Cache keys follow 2.5dwallpp: mask = (model, flip, refine), depth = (model, input size); the backend is
+    // part of the depth key because the fp16 (WebGPU) and int8 (WASM) builds give different maps.
+    const maskKey = alpha ? `${id}|alpha` : segJob ? `${id}|${segJob.model}|${+segJob.flipAvg}|${+segJob.refine}` : `${id}|off`;
+    const depthKey =
+      depthJob.model === 'heuristic' ? `${id}|heuristic` : `${id}|${depthJob.model}|${depthJob.size}|${backend}`;
     const rawKey = `${maskKey}|${depthKey}`;
 
     const fullHit = this.rawCache.get(rawKey);
@@ -129,9 +139,12 @@ export class Pipeline implements IPipeline {
       return fullHit;
     }
 
-    let maskEntry: MaskEntry | undefined = segModel
-      ? this.maskCache.get(maskKey)
-      : { mask: new Float32Array(w * h), model: null, backend: 'cpu' };
+    let maskEntry: MaskEntry | undefined = alpha
+      ? { mask: alpha, model: null, backend: 'cpu' }
+      : segJob
+        ? this.maskCache.get(maskKey)
+        : { mask: new Float32Array(w * h), model: null, backend: 'cpu' };
+    if (alpha) this.emit({ stage: 'segmentation', progress: 1, message: "Using the image's transparency as the mask" });
     let depthEntry = this.depthCache.get(depthKey);
     const timings: Record<string, number> = {};
     let degraded = false;
@@ -142,8 +155,8 @@ export class Pipeline implements IPipeline {
           width: w,
           height: h,
           pixels: source.pixels.data,
-          segmentation: maskEntry ? null : segModel,
-          depth: depthEntry ? null : depthModel,
+          segmentation: maskEntry ? null : segJob,
+          depth: depthEntry ? null : depthJob,
           backend,
         },
         (p) => {
@@ -191,7 +204,7 @@ export class Pipeline implements IPipeline {
     return raw;
   }
 
-  async reconstruct(source: SourceImage, raw: RawAnalysis, settings: Settings): Promise<PreparedSceneEx> {
+  async reconstruct(source: SourceImage, raw: RawAnalysis, settings: Settings): Promise<PreparedScene> {
     this.reconstructor ??= new ReconstructClient();
     const t0 = performance.now();
     this.emit({ stage: 'refine', progress: -1, message: 'Refining mask and depth' });

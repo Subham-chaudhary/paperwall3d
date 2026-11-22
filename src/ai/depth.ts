@@ -1,11 +1,11 @@
 /**
  * Depth Anything V2 pre- and post-processing (pure TypedArray code, runs inside the inference worker).
  *
- * Pre:  resize keeping aspect ratio so the long edge is ~518 and both sides are multiples of 14,
+ * Pre:  resize keeping the aspect ratio so the SHORT side is `depth_size` (both sides multiples of 14),
  *       rescale to 0..1, ImageNet mean/std, NCHW float32.
- * Post: relative inverse depth (bigger = nearer) → robust 1 %/99 % min-max → bilinear upsample to working size.
+ * Post: relative inverse depth (bigger = nearer) is only upsampled to working size. It stays raw and
+ *       un-normalised: the percentile clip happens in reconstruct (depth.clip_lo / clip_hi).
  */
-import { percentileNormalize } from '../imaging/normalize';
 import { resample } from '../imaging/resample';
 import type { DepthModelSpec } from './models';
 
@@ -15,15 +15,20 @@ export interface DepthInput {
   height: number;
 }
 
-export function depthInputSize(w: number, h: number, spec: DepthModelSpec): { width: number; height: number } {
+export const DEPTH_SIZE_MIN = 252;
+export const DEPTH_SIZE_MAX = 1008;
+
+/** Network input size for an image: short side ~`size` (the long side is capped at 2x), multiples of `spec.multipleOf`. */
+export function depthInputSize(w: number, h: number, size: number, spec: DepthModelSpec): { width: number; height: number } {
   const m = spec.multipleOf;
-  const scale = spec.inputLongEdge / Math.max(w, h);
+  const clamped = Math.min(DEPTH_SIZE_MAX, Math.max(DEPTH_SIZE_MIN, size));
+  const scale = Math.min(clamped / Math.min(w, h), (2 * clamped) / Math.max(w, h));
   const snap = (v: number): number => Math.max(m, Math.round((v * scale) / m) * m);
   return { width: snap(w), height: snap(h) };
 }
 
-export function prepareDepthInput(rgba: Uint8ClampedArray, w: number, h: number, spec: DepthModelSpec): DepthInput {
-  const { width, height } = depthInputSize(w, h, spec);
+export function prepareDepthInput(rgba: Uint8ClampedArray, w: number, h: number, size: number, spec: DepthModelSpec): DepthInput {
+  const { width, height } = depthInputSize(w, h, size, spec);
   const small = resample(rgba, w, h, width, height, 4);
   const plane = width * height;
   const data = new Float32Array(3 * plane);
@@ -36,6 +41,7 @@ export function prepareDepthInput(rgba: Uint8ClampedArray, w: number, h: number,
 
 /**
  * @param output     predicted_depth values, (outW × outH)
+ * @returns raw depth bilinearly upsampled to w × h
  * @throws if the network produced non-finite values (broken fp16 kernels on some GPUs)
  */
 export function postprocessDepth(output: Float32Array, outW: number, outH: number, w: number, h: number): Float32Array {
@@ -45,6 +51,6 @@ export function postprocessDepth(output: Float32Array, outW: number, outH: numbe
   let finite = 0;
   for (let i = 0; i < n; i += 7) if (Number.isFinite(d[i]!)) finite++;
   if (finite < Math.ceil(n / 7) * 0.99) throw new Error('Depth model produced non-finite values');
-  percentileNormalize(d, 0.01, 0.99);
+  for (let i = 0; i < n; i++) if (!Number.isFinite(d[i]!)) d[i] = 0;
   return resample(d, outW, outH, w, h, 1);
 }

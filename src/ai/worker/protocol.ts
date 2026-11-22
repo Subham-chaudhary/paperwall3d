@@ -1,6 +1,20 @@
 /** Message shapes between the main thread and the inference worker. */
 import type { Backend, DepthModelId, PipelineProgress, SegmentationModelId } from '../../core/types';
 
+export interface SegmentationJob {
+  model: SegmentationModelId;
+  /** Average with a mirrored pass. */
+  flipAvg: boolean;
+  /** Second pass zoomed on the first pass's object. */
+  refine: boolean;
+}
+
+export interface DepthJob {
+  model: DepthModelId;
+  /** Short side fed to the depth model, px. */
+  size: number;
+}
+
 export interface AnalyzeRequest {
   type: 'analyze';
   jobId: number;
@@ -8,10 +22,10 @@ export interface AnalyzeRequest {
   height: number;
   /** Working-resolution RGBA (a private copy, transferred). */
   pixels: Uint8ClampedArray;
-  /** null = skip segmentation (disabled, or caller already has the mask). */
-  segmentation: SegmentationModelId | null;
+  /** null = skip segmentation (use_subject off, or the caller already has the mask). */
+  segmentation: SegmentationJob | null;
   /** null = skip depth (caller already has it). */
-  depth: DepthModelId | null;
+  depth: DepthJob | null;
   backend: Backend;
 }
 

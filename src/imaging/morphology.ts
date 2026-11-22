@@ -7,7 +7,7 @@
 const INF = 1e20;
 
 /** 1-D squared-distance transform of the sampled function `f` (length n) into `d`, using scratch `v`/`z`. */
-function dt1d(f: Float64Array, n: number, d: Float64Array, v: Int32Array, z: Float64Array): void {
+function dt1d(f: Float64Array, n: number, d: Float64Array, v: Int32Array, z: Float64Array, arg: Int32Array | null = null): void {
   let k = 0;
   v[0] = 0;
   z[0] = -Infinity;
@@ -29,6 +29,7 @@ function dt1d(f: Float64Array, n: number, d: Float64Array, v: Int32Array, z: Flo
     while (z[k + 1]! < q) k++;
     const dq = q - v[k]!;
     d[q] = dq * dq + f[v[k]!]!;
+    if (arg) arg[q] = v[k]!;
   }
 }
 
@@ -79,5 +80,51 @@ export function erodeBinary(set: Uint8Array, w: number, h: number, r: number): U
   const r2 = r * r;
   const out = new Uint8Array(set.length);
   for (let i = 0; i < out.length; i++) out[i] = set[i] && dist[i]! > r2 ? 1 : 0;
+  return out;
+}
+
+/**
+ * For every pixel, the linear index of the nearest pixel where `set !== 0` (itself if it is in the set),
+ * or -1 everywhere if the set is empty. Exact Euclidean nearest-site lookup, the equivalent of OpenCV's
+ * distanceTransformWithLabels but returning the site position instead of a label.
+ */
+export function nearestSite(set: Uint8Array, w: number, h: number): Int32Array {
+  const n = w * h;
+  const out = new Int32Array(n);
+  let any = false;
+  for (let i = 0; i < n; i++) {
+    if (set[i]) {
+      any = true;
+      break;
+    }
+  }
+  if (!any) return out.fill(-1);
+
+  const m = Math.max(w, h);
+  const f = new Float64Array(m);
+  const d = new Float64Array(m);
+  const v = new Int32Array(m);
+  const z = new Float64Array(m + 1);
+  const arg = new Int32Array(m);
+  const colDist = new Float32Array(n);
+  const colRow = new Int32Array(n); // row of the nearest site in the same column
+
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) f[y] = set[y * w + x] ? 0 : INF;
+    dt1d(f, h, d, v, z, arg);
+    for (let y = 0; y < h; y++) {
+      colDist[y * w + x] = d[y]!;
+      colRow[y * w + x] = arg[y]!;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) f[x] = colDist[row + x]!;
+    dt1d(f, w, d, v, z, arg);
+    for (let x = 0; x < w; x++) {
+      const sx = arg[x]!;
+      out[row + x] = colRow[row + sx]! * w + sx;
+    }
+  }
   return out;
 }
