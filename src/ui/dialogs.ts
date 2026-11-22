@@ -1,5 +1,6 @@
 /** About and Preferences dialogs. */
 import { APP_NAME, APP_VERSION } from '../core/version';
+import { RELEASE_NOTES } from '../core/releaseNotes';
 import type { AppContext } from './context';
 import { h } from './dom';
 import { iconSvg } from './icons';
@@ -51,10 +52,21 @@ export function openAbout(_ctx: AppContext): void {
     ),
     h('p', { class: 'pw-note', text: 'Turn any image into a depth-aware 2.5D parallax wallpaper using in-browser AI (2D parallax view, 3D camera view, 2.5dwallpp-compatible config.json). Object masking and depth estimation run on your device through ONNX Runtime Web (WebGPU with WASM fallback); the scene is rendered with Three.js.' }),
     h('p', { class: 'pw-note privacy', text: 'Privacy: all processing happens on your device. Your images are never uploaded.' }),
+    ...whatsNew(),
     h('h4', { class: 'pw-dialog-h', text: 'Third-party licenses' }),
     licenseTable(),
   );
   openWindow({ title: `About ${APP_NAME}`, icon: 'info', width: 460, content, modal: true });
+}
+
+/** "What's new in X" from CHANGELOG.md (empty if the running version has no entry). */
+function whatsNew(): HTMLElement[] {
+  if (!RELEASE_NOTES || !RELEASE_NOTES.items.length) return [];
+  const title = `What's new in ${RELEASE_NOTES.version}` + (RELEASE_NOTES.date ? ` (${RELEASE_NOTES.date})` : '');
+  return [
+    h('h4', { class: 'pw-dialog-h', text: title }),
+    h('ul', { class: 'pw-note pw-whatsnew' }, ...RELEASE_NOTES.items.map((it) => h('li', { text: it }))),
+  ];
 }
 
 export function openPreferences(ctx: AppContext): void {

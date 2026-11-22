@@ -1,5 +1,6 @@
 /** Blender-style splash screen: hero banner, quick actions, recent projects and links. */
 import { APP_NAME, APP_VERSION } from '../core/version';
+import { whatsNewSummary } from '../core/releaseNotes';
 import type { AppContext } from './context';
 import { PRESETS } from '../core/presets';
 import { h, pickFile } from './dom';
@@ -142,7 +143,7 @@ export function openSplash(ctx: AppContext): void {
     { class: 'pw-splash-col' },
     h('div', { class: 'pw-splash-h', text: 'Links' }),
     linkRow('shield', 'Privacy', 'All processing happens on your device', act(() => ctx.ops.run('window.about'))),
-    linkRow('sparkle', "What's New", `PaperWall3D ${APP_VERSION}: 2D parallax, 3D camera, config.json, wallpaper preview`, act(() => ctx.ops.run('window.about'))),
+    linkRow('sparkle', "What's New", `${APP_VERSION}: ${whatsNewSummary()}`, act(() => ctx.ops.run('window.about'))),
     linkRow('keyboard', 'Shortcuts', 'F3 searches every operator, Z opens the view pie, P picks the object', act(() => ctx.ops.run('search.operators'))),
     linkRow('gear', 'Preferences', 'Startup, export and storage options', act(() => ctx.ops.run('window.preferences'))),
   );
