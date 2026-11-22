@@ -85,16 +85,15 @@ const RAW = {
 
 export type IconName = keyof typeof RAW | 'logo';
 
-const LOGO = `
-<path d="M2 11.2 8 14l6-2.8V9.4L8 12.2 2 9.4z" fill="#2c4d85"/>
-<path d="M2 8.4 8 11.2l6-2.8V6.6L8 9.4 2 6.6z" fill="#4772b3"/>
-<path d="M8 2 14 4.8v1.6L8 9.2 2 6.4V4.8z" fill="#ffa033"/>
-<path d="M8 2 2 4.8l6 2.8 6-2.8z" fill="#ffc678"/>
-<path d="M8 3.4 5 4.8l3 1.4 3-1.4z" fill="#ff8a00" opacity=".55"/>`;
+/** The real app logo (public/favicon.svg), served as an image rather than a monochrome inline icon. */
+const LOGO_URL = `${import.meta.env.BASE_URL}favicon.svg`;
 
 /** Return an SVG string for the icon at the requested pixel size. */
 export function iconSvg(name: IconName, size = 16): string {
-  const inner = name === 'logo' ? LOGO : RAW[name];
+  if (name === 'logo') {
+    return `<img class="pw-icon-svg pw-logo-img" src="${LOGO_URL}" width="${size}" height="${size}" alt="" draggable="false" />`;
+  }
+  const inner = RAW[name];
   return `<svg class="pw-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" focusable="false">${inner}</svg>`;
 }
 
