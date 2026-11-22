@@ -2,7 +2,7 @@
  * Live HTML wallpaper export: one self-contained .html file with the 2D parallax shader (raw WebGL1 for maximum
  * compatibility), the layer textures as data URIs and the current parallax/layers settings baked in. Cover-fit at
  * devicePixelRatio (capped at 2); input is the mouse, falling back to auto motion after ~4 s idle, plus
- * deviceorientation (gyro) on phones (iOS asks permission on the first tap); pauses while hidden; no external requests.
+ * deviceorientation (gyro) on phones (iOS asks permission on the first tap); keeps rendering inside wallpaper hosts that report the page as hidden; no external requests.
  *
  * The fragment shader, fit and tilt-cover maths are the very same sources the in-app view uses (parallaxShader.ts,
  * layout.ts), injected as text, so the two cannot drift.
@@ -96,6 +96,8 @@ const TEMPLATE = /* html */ `<!doctype html>
 <style>html,body{margin:0;height:100%;overflow:hidden;background:__BG__}canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block}#m{position:fixed;left:16px;bottom:16px;color:#aaa;font:14px sans-serif}</style>
 </head><body><canvas id="c"></canvas><div id="m"></div>
 <script>
+function showError(msg) { var m = document.getElementById('m'); if (m) m.textContent = 'PaperWall3D: ' + msg; }
+window.addEventListener('error', function (e) { showError(e.message || 'script error'); });
 (function () {
 'use strict';
 var C = __CONFIG__;
@@ -107,7 +109,7 @@ var clamp = function (v, a, b) { return Math.min(Math.max(v, a), b); };
 var canvas = document.getElementById('c');
 var gl = canvas.getContext('webgl', { alpha: false, antialias: true, premultipliedAlpha: true, powerPreference: 'high-performance' }) ||
          canvas.getContext('experimental-webgl', { alpha: false });
-if (!gl) { document.getElementById('m').textContent = 'WebGL is not available in this browser.'; return; }
+if (!gl) { showError('WebGL is not available here. Enable GPU acceleration in your wallpaper app or browser.'); return; }
 canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); });
 canvas.addEventListener('webglcontextrestored', function () { location.reload(); });
 
@@ -175,15 +177,20 @@ function resize() {
   gl.viewport(0, 0, canvas.width, canvas.height);
 }
 window.addEventListener('resize', resize);
+if (typeof ResizeObserver === 'function') new ResizeObserver(resize).observe(document.documentElement);
 resize();
 
 // input: mouse, auto-motion fallback after ~4 s idle, gyro on phones
 var P = C.parallax, L = C.layers;
 var mx = 0, my = 0, lastInput = -1e9, cx = 0, cy = 0;
-window.addEventListener('pointermove', function (e) {
-  mx = clamp(e.clientX / window.innerWidth * 2 - 1, -1, 1); my = clamp(e.clientY / window.innerHeight * 2 - 1, -1, 1);
+function onMove(e) {
+  var w = window.innerWidth || vw, h = window.innerHeight || vh;
+  mx = clamp(e.clientX / w * 2 - 1, -1, 1); my = clamp(e.clientY / h * 2 - 1, -1, 1);
   lastInput = performance.now();
-});
+}
+window.addEventListener('pointermove', onMove);
+window.addEventListener('mousemove', onMove);
+document.addEventListener('mousemove', onMove);
 function onOrientation(e) {
   if (e.gamma == null || e.beta == null) return;
   var a = (screen.orientation && screen.orientation.angle) || window.orientation || 0, g = e.gamma, b = e.beta - 45;
@@ -236,8 +243,10 @@ function layer(color, depth, isFg, scale, base, flatDepth) {
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
+var lastFrameAt = 0;
 function frame(now) {
-  raf = requestAnimationFrame(frame);
+  if (window.innerWidth !== vw || window.innerHeight !== vh) resize();
+  lastFrameAt = now;
   var dt = last ? Math.min((now - last) / 1000, 0.1) : 1 / 60; last = now;
   var auto = P.autoMotion || now - lastInput > 4000;
   var tx = auto ? Math.sin(now / 1800) * 0.8 : mx, ty = auto ? Math.cos(now / 2300) * 0.5 : my;
@@ -255,10 +264,16 @@ function frame(now) {
   }
 }
 
-function start() { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } }
-document.addEventListener('visibilitychange', function () {
-  if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else start();
-});
+function loop(now) { raf = requestAnimationFrame(loop); frame(now); }
+function start() {
+  last = 0;
+  frame(performance.now());                     // draw immediately, even if the host reports the page hidden
+  if (!raf) raf = requestAnimationFrame(loop);
+  setInterval(function () {                      // watchdog: rAF is suspended in some wallpaper hosts
+    var now = performance.now();
+    if (now - lastFrameAt > 100) frame(now);
+  }, 33);
+}
 
 var names = ['bg', 'fg', 'bgDepth', 'fgDepth'].filter(function (n) { return C.img[n]; });
 Promise.all(names.map(function (n) { return texture(C.img[n]); })).then(function (ts) {
