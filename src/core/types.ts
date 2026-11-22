@@ -11,7 +11,10 @@
  * - depth: 1 = nearest to camera, 0 = farthest.
  * - mask:  1 = main object, 0 = background.
  * - Image coordinates for `click` / `center`: [x, y] in 0..1, origin top-left.
- * - "working resolution": the long edge of the processed image (Settings.runtime.workingResolution).
+ * - "processing resolution" (Settings.runtime.workingResolution): long edge of the AI inputs/outputs and of every
+ *   refined MAP (mask, depth, bgDepth, fgDepth, objDepth). Interactive post-processing runs at this size.
+ * - "output resolution" (Settings.runtime.outputResolution): long edge of the COLOUR layers the user sees and exports
+ *   (source, bgColor, fg) = the uploaded picture's size capped at 4K (3840), never upscaled. See src/core/output.ts.
  */
 
 // ───────────────────────────────────────────── Settings ─────────────────────────────────────────────
@@ -25,6 +28,8 @@ export type ViewMode = '2d' | '3d' | 'config';
 export type StageView = 'result' | 'mask' | 'objdepth' | 'depth';
 /** Where depth is applied: `subject` = flat background plane + object relief; `all` = whole-image depth. */
 export type LayerScope = 'subject' | 'all';
+/** Long-edge cap of the colour layers: 'auto' = source size up to 4K (3840 px). */
+export type OutputResolution = 'auto' | 2560 | 1920;
 export type WallpaperAspect = 'screen' | '16:9' | '16:10' | '21:9' | '32:9' | '9:19.5' | '1:1';
 
 /** 2D parallax view (view-only, instant). */
@@ -144,8 +149,10 @@ export interface WallpaperSettings {
 
 export interface RuntimeSettings {
   backend: Backend;
-  /** Long edge of the processed image in pixels. */
+  /** Processing resolution: long edge of AI inputs/outputs and refined maps. */
   workingResolution: 768 | 1024 | 1600 | 2048;
+  /** Output resolution: long-edge cap of the colour layers (source, bgColor, fg). */
+  outputResolution: OutputResolution;
 }
 
 export interface Settings {
@@ -176,8 +183,13 @@ export interface SourceImage {
   /** Working-resolution dimensions. */
   width: number;
   height: number;
-  /** Working-resolution RGBA pixels. */
+  /** Processing-resolution RGBA pixels (width × height). */
   pixels: ImageData;
+  /**
+   * Output-resolution RGBA pixels (source size capped at the output resolution, never upscaled, never smaller than
+   * `pixels`). Same aspect as `pixels`. Its own .width/.height. May be the same object as `pixels`.
+   */
+  hd: ImageData;
   /** Original file bytes (kept for persistence/export). */
   blob: Blob;
 }
@@ -204,19 +216,23 @@ export interface RawAnalysis {
  * Re-run whenever a non-model mask/depth setting changes.
  */
 export interface PreparedScene {
+  /** Size of every MAP below (processing resolution). */
   width: number;
   height: number;
-  /** Working-resolution source colours. */
+  /** Size of the COLOUR layers `source`, `bgColor`, `fg` (output resolution; equal to width/height when not HD). */
+  colorWidth: number;
+  colorHeight: number;
+  /** Output-resolution source colours (= SourceImage.hd). */
   source: ImageData;
   /** Stage 1: main object mask = final alpha (thresholded, cleaned, grown, feathered), 0..1. */
   mask: Float32Array;
   /** Whole-image depth, finished (clip, smooth, edge snap, gamma, invert), 0..1. */
   depth: Float32Array;
-  /** Background colour with the object inpainted out (hole = mask>0.01 dilated). Alpha 255. */
+  /** Output-resolution background colour with the object inpainted out (hole = mask>0.01 dilated). Alpha 255. */
   bgColor: ImageData;
   /** Whole-image depth with the object inpainted out (scope "all" background). */
   bgDepth: Float32Array;
-  /** Object RGBA: defringed colours, alpha = mask. */
+  /** Output-resolution object RGBA: defringed colours, alpha = mask upsampled with a guided filter. */
   fg: ImageData;
   /** Object depth in the true range, rim fixed by nearest fill from inside (scope "all" object). */
   fgDepth: Float32Array;
@@ -275,8 +291,11 @@ export interface ModelCacheEntry {
 export interface IPipeline {
   onProgress(cb: (p: PipelineProgress) => void): () => void;
   getBackendInfo(): Promise<BackendInfo>;
-  /** Decode + resize to working resolution. */
-  loadImage(file: Blob, name: string, workingResolution: number): Promise<SourceImage>;
+  /**
+   * Decode once, producing `pixels` at the processing resolution and `hd` at `outputLongEdge`
+   * (already resolved via resolveOutputLongEdge; defaults to the processing resolution).
+   */
+  loadImage(file: Blob, name: string, workingResolution: number, outputLongEdge?: number): Promise<SourceImage>;
   /** Run AI models. Expensive; cached per (image, model key) internally. */
   analyze(source: SourceImage, settings: Settings): Promise<RawAnalysis>;
   /** Cheap post-processing → layer set. Safe to call on every slider change (debounced by caller). */

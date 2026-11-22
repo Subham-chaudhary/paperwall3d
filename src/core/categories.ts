@@ -169,14 +169,14 @@ export const CATEGORIES: SettingsCategory[] = [
     id: 'processing',
     title: 'Processing',
     icon: 'gear',
-    hint: 'Image resolution, AI backend and viewport options.',
+    hint: 'Output and processing resolution, AI backend and viewport options.',
     collapsed: true,
     groups: [
       {
         id: 'processing-basic',
         title: 'Processing',
         tier: 'basic',
-        fields: ['runtime.workingResolution', 'runtime.backend'],
+        fields: ['runtime.outputResolution', 'runtime.workingResolution', 'runtime.backend'],
         actions: ['reanalyze'],
       },
       {

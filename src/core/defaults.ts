@@ -66,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   runtime: {
     backend: 'auto',
     workingResolution: 1600,
+    outputResolution: 'auto',
   },
 };
 

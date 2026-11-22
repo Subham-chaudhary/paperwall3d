@@ -182,12 +182,17 @@ export const SCHEMA: { [S in SettingsSection]: SectionSchema } = {
         { value: 'webgpu', label: 'WebGPU' },
         { value: 'wasm', label: 'WASM (CPU)' },
       ], true),
-      workingResolution: enm('Working Resolution', 'Long edge of the processed image', [
+      workingResolution: enm('Processing resolution', 'Long edge used by the AI and the editable maps (mask, depth). Higher is finer but slower', [
         { value: 768, label: '768 px' },
         { value: 1024, label: '1024 px' },
         { value: 1600, label: '1600 px' },
         { value: 2048, label: '2048 px' },
       ], true),
+      outputResolution: enm('Output resolution', 'Resolution of the colour layers you see and export: the picture’s own size, capped at 4K. Never upscaled', [
+        { value: 'auto', label: 'Auto (source, max 4K)' },
+        { value: 2560, label: '1440p (2560 px)' },
+        { value: 1920, label: '1080p (1920 px)' },
+      ]),
     },
   },
 };
