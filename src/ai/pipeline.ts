@@ -65,6 +65,8 @@ export class Pipeline implements IPipeline {
   private reconstructor: ReconstructClient | null = null;
 
   private imageIds = new WeakMap<SourceImage, number>();
+  private lastLoad: { blob: Blob; working: number; width: number; height: number; id: number } | null = null;
+  private hdBuilt = new WeakSet<SourceImage>();
   private nextImageId = 1;
   private maskCache = new Lru<MaskEntry>(6);
   private depthCache = new Lru<DepthEntry>(6);
@@ -85,15 +87,24 @@ export class Pipeline implements IPipeline {
     return probeBackend(this.activeBackend);
   }
 
-  async loadImage(file: Blob, name: string, workingResolution: number): Promise<SourceImage> {
+  async loadImage(file: Blob, name: string, workingResolution: number, outputLongEdge?: number): Promise<SourceImage> {
     this.emit({ stage: 'decode', progress: -1, message: `Decoding ${name}` });
     try {
-      const img = await loadSourceImage(file, name, workingResolution);
+      const img = await loadSourceImage(file, name, workingResolution, outputLongEdge);
+      // Reloading the same file at the same processing size (a new output resolution) is the same image for the
+      // analysis caches, so no model runs again.
+      const last = this.lastLoad;
+      if (last && last.blob === file && last.working === workingResolution && last.width === img.width && last.height === img.height) {
+        this.imageIds.set(img, last.id);
+      } else {
+        this.lastLoad = { blob: file, working: workingResolution, width: img.width, height: img.height, id: this.imageId(img) };
+      }
+      const hdNote = img.hd.width !== img.width ? `, output ${img.hd.width}×${img.hd.height}` : '';
       this.emit({
         stage: 'decode',
         progress: 1,
         message: `Loaded ${name} — ${img.originalWidth}×${img.originalHeight}` +
-          (img.width !== img.originalWidth ? ` (working size ${img.width}×${img.height})` : ''),
+          (img.width !== img.originalWidth ? ` (processing size ${img.width}×${img.height}${hdNote})` : ''),
       });
       return img;
     } catch (err) {
@@ -207,9 +218,16 @@ export class Pipeline implements IPipeline {
   async reconstruct(source: SourceImage, raw: RawAnalysis, settings: Settings): Promise<PreparedScene> {
     this.reconstructor ??= new ReconstructClient();
     const t0 = performance.now();
-    this.emit({ stage: 'refine', progress: -1, message: 'Refining mask and depth' });
+    const isHd = source.hd.width > source.width || source.hd.height > source.height;
+    const firstHd = isHd && !this.hdBuilt.has(source);
+    this.emit({
+      stage: 'refine',
+      progress: -1,
+      message: firstHd ? `Building ${source.hd.width}×${source.hd.height} layers…` : 'Refining mask and depth',
+    });
     try {
       const scene = await this.reconstructor.reconstruct(source, raw, settings);
+      if (isHd) this.hdBuilt.add(source);
       this.emit({
         stage: 'done',
         progress: 1,

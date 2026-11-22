@@ -9,12 +9,37 @@
  *   alpha:    > rimGeometry(rim), > hole > bgColor, bgDepth(depth), > fg (defringe)
  *
  * The mask is found with the depth BEFORE depth_invert (as in the reference); only depth_assist reads it.
+ *
+ * Colour layers: when the output (HD) size exceeds the processing size, bgColor/fg are built at HD size from the HD
+ * source by `hd.ts` (guided alpha upsampling, HD defringe, hole fill composited into HD). Depth-only changes never
+ * touch them: the caller passes the key of the colour layers it already holds and gets `colorKind: 'known'`.
  */
 import type { DepthSettings, MaskSettings } from '../core/types';
 import { buildRimGeometry, clipDepth, invertDepth, objectDepth, smoothDepth, snapAndGamma, type RimGeometry } from './depthFinish';
-import { buildForeground, buildHole, inpaintColor, inpaintDepth, prepareInpaintSource, type HoleInfo, type InpaintSource } from './layers';
+import {
+  buildAlphaGuide,
+  buildForegroundHd,
+  estimateGrainHd,
+  GATE_RADIUS,
+  HD_BOX_PAD,
+  inpaintColorHd,
+  upsampleAlpha,
+  type AlphaGuide,
+} from './hd';
+import {
+  buildDefringe,
+  buildForeground,
+  buildHole,
+  inpaintColor,
+  inpaintDepth,
+  prepareInpaintSource,
+  type Defringe,
+  type HoleInfo,
+  type InpaintSource,
+} from './layers';
 import { buildBinaryMask, featherMask } from './mask';
 import { lumaOf } from './pixels';
+import { pushPullFill } from './pushpull';
 
 export interface ReconstructInputs {
   width: number;
@@ -27,23 +52,43 @@ export interface ReconstructInputs {
   rawDepth: Float32Array;
   /** False when no segmentation model produced `rawMask`. */
   hasSegmentation: boolean;
+  /** Output-resolution RGBA when it is larger than the processing size; omitted/null when the same size. */
+  hd?: Uint8ClampedArray | null;
+  hdWidth?: number;
+  hdHeight?: number;
 }
 
 export interface ReconstructParams {
   mask: MaskSettings;
   depth: DepthSettings;
+  /** Key of the colour layers the caller already holds; they are not rebuilt or re-sent while it still matches. */
+  knownColorKey?: string | null;
 }
 
+/**
+ * `data`: `bgColor`/`fg` are new buffers (colorWidth x colorHeight, owned by the caller, safe to transfer).
+ * `known`: unchanged since `knownColorKey`; both are null. `plain`: no object, so the background is the source itself
+ * and the foreground is an empty 1x1; both are null.
+ */
+export type ColorKind = 'data' | 'known' | 'plain';
+
 export interface ReconstructOutput {
+  /** Size of the maps (processing resolution). */
   width: number;
   height: number;
+  /** Size of the colour layers (output resolution). */
+  colorWidth: number;
+  colorHeight: number;
   mask: Float32Array;
   depth: Float32Array;
-  /** RGBA, alpha 255. */
-  bgColor: Uint8ClampedArray;
+  colorKind: ColorKind;
+  /** Identifies the colour layers' content; send it back as `knownColorKey`. */
+  colorKey: string;
+  /** RGBA, alpha 255. Null unless colorKind is 'data'. */
+  bgColor: Uint8ClampedArray | null;
   bgDepth: Float32Array;
-  /** RGBA, alpha = mask. */
-  fg: Uint8ClampedArray;
+  /** RGBA, alpha = mask. Null unless colorKind is 'data'. */
+  fg: Uint8ClampedArray | null;
   fgDepth: Float32Array;
   objDepth: Float32Array;
   center: [number, number];
@@ -55,6 +100,9 @@ export interface ReconstructOutput {
 /** Below this object area fraction the mask counts as empty (the masker found nothing). */
 const MIN_COVERAGE = 0.001;
 
+/** Unique per installed HD image, across instances (so a worker -> inline fallback never repeats a key). */
+let nextHdId = 1;
+
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 interface MaskStats {
@@ -62,16 +110,40 @@ interface MaskStats {
   center: [number, number];
 }
 
+interface HdImage {
+  data: Uint8ClampedArray;
+  w: number;
+  h: number;
+}
+
 export class Reconstructor {
   private inputs: ReconstructInputs | null = null;
   private luma: Float32Array | null = null;
   private cache = new Map<string, { key: string; value: unknown }>();
+  private hd: HdImage | null = null;
+  private hdId = 0;
 
   /** Installs new source data and drops every cached stage. */
   setInputs(inputs: ReconstructInputs): void {
     this.inputs = inputs;
     this.luma = lumaOf(inputs.source, inputs.width * inputs.height);
     this.cache.clear();
+    this.installHd(inputs.hd ?? null, inputs.hdWidth ?? 0, inputs.hdHeight ?? 0);
+  }
+
+  /**
+   * Replaces only the output-resolution pixels. The processing pixels, raw maps and every map stage stay valid, so a
+   * change of output resolution costs one HD finalisation and nothing else.
+   */
+  setHd(hd: Uint8ClampedArray | null, width: number, height: number): void {
+    if (!this.inputs) throw new Error('Reconstructor: inputs not set');
+    this.installHd(hd, width, height);
+  }
+
+  private installHd(data: Uint8ClampedArray | null, w: number, h: number): void {
+    const inp = this.inputs!;
+    this.hd = data && (w !== inp.width || h !== inp.height) ? { data, w, h } : null;
+    this.hdId = nextHdId++;
   }
 
   hasInputs(): boolean {
@@ -142,9 +214,13 @@ export class Reconstructor {
     const hasForeground = useSubject && stats.coverage > MIN_COVERAGE;
 
     // Layers.
-    let bgColor: Uint8ClampedArray;
+    const colorWidth = this.hd?.w ?? w;
+    const colorHeight = this.hd?.h ?? h;
+    let colorKind: ColorKind = 'plain';
+    let colorKey = 'plain';
+    let bgColor: Uint8ClampedArray | null = null;
+    let fg: Uint8ClampedArray | null = null;
     let bgDepth: Float32Array;
-    let fg: Uint8ClampedArray;
     let fgDepth: Float32Array;
     let objDepth: Float32Array;
     if (hasForeground) {
@@ -158,15 +234,28 @@ export class Reconstructor {
       objDepth = obj.objDepth;
 
       const hole = this.stage<HoleInfo>('hole', alphaKey, timings, () => buildHole(alpha, w, h));
-      const isrc = this.stage<InpaintSource>('inpaint-source', 'image', timings, () => prepareInpaintSource(inp.source, luma, w, h));
-      bgColor = this.stage('bg-color', alphaKey, timings, () => inpaintColor(inp.source, isrc, hole));
       bgDepth = this.stage('bg-depth', `${alphaKey}|${depthKey}`, timings, () => inpaintDepth(depth, hole));
       const defringe = Math.min(m.rim, 3);
-      fg = this.stage('fg', `${alphaKey}|${defringe}`, timings, () => buildForeground(inp.source, alpha, w, h, defringe));
+      colorKey = `${this.hdId}|${colorWidth}x${colorHeight}|${alphaKey}|${defringe}`;
+      if (params.knownColorKey === colorKey) {
+        colorKind = 'known';
+      } else {
+        colorKind = 'data';
+        const isrc = this.stage<InpaintSource>('inpaint-source', 'image', timings, () => prepareInpaintSource(inp.source, luma, w, h));
+        if (this.hd) {
+          const t1 = now();
+          const colors = this.buildHdColors(this.hd, alpha, alphaKey, defringe, hole, isrc, timings);
+          bgColor = colors.bg;
+          fg = colors.fg;
+          timings.hd = Math.round((now() - t1) * 10) / 10;
+        } else {
+          // Same size as the processing resolution: the 2.1.x path, stage-cached. Copies, since the caller owns them.
+          bgColor = this.stage('bg-color', alphaKey, timings, () => inpaintColor(inp.source, isrc, hole)).slice();
+          fg = this.stage('fg', `${alphaKey}|${defringe}`, timings, () => buildForeground(inp.source, alpha, w, h, defringe)).slice();
+        }
+      }
     } else {
-      bgColor = this.stage('bg-color', 'plain', timings, () => opaqueCopy(inp.source));
       bgDepth = depth;
-      fg = this.stage('fg', 'empty', timings, () => new Uint8ClampedArray(n * 4));
       fgDepth = depth;
       objDepth = this.stage('object-depth', 'empty', timings, () => new Float32Array(n));
     }
@@ -176,11 +265,15 @@ export class Reconstructor {
     return {
       width: w,
       height: h,
+      colorWidth,
+      colorHeight,
       mask: alpha.slice(),
       depth: depth.slice(),
-      bgColor: bgColor.slice(),
+      colorKind,
+      colorKey,
+      bgColor,
       bgDepth: bgDepth.slice(),
-      fg: fg.slice(),
+      fg,
       fgDepth: fgDepth.slice(),
       objDepth: objDepth.slice(),
       center: stats.center,
@@ -188,6 +281,48 @@ export class Reconstructor {
       hasForeground,
       timings,
     };
+  }
+
+  /**
+   * HD finalisation. The processing-size parts (guided-filter coefficients, defringe geometry, hole fill) are cached
+   * per mask; the HD pixel passes run every time and produce fresh buffers, which are never retained (40 MB each at 4K).
+   */
+  private buildHdColors(
+    hd: HdImage,
+    alpha: Float32Array,
+    alphaKey: string,
+    defringe: number,
+    hole: HoleInfo,
+    isrc: InpaintSource,
+    timings: Record<string, number>,
+  ): { bg: Uint8ClampedArray; fg: Uint8ClampedArray } {
+    const inp = this.inputs!;
+    const luma = this.luma!;
+    const { width: w, height: h } = inp;
+    const guide = this.stage<AlphaGuide | null>('hd-guide', alphaKey, timings, () => buildAlphaGuide(alpha, luma, w, h));
+    const def = this.stage<Defringe | null>('hd-defringe', `${alphaKey}|${defringe}`, timings, () =>
+      buildDefringe(alpha, w, h, defringe, HD_BOX_PAD),
+    );
+    const fill = this.stage<Float32Array | null>('hd-fill', alphaKey, timings, () =>
+      hole.box && hole.hasValid ? pushPullFill(isrc.rgbSmall, hole.validSmall, hole.sw, hole.sh, 3) : null,
+    );
+    const grain = this.stage('hd-grain', `${this.hdId}`, timings, () => estimateGrainHd(hd.data, hd.w, hd.h));
+
+    const t0 = now();
+    const ext = defringe + GATE_RADIUS + 2;
+    let fg: Uint8ClampedArray;
+    if (guide) {
+      const up = upsampleAlpha(guide, hd.data, hd.w, hd.h, w, h);
+      timings['hd-alpha'] = Math.round((now() - t0) * 10) / 10;
+      fg = buildForegroundHd(hd.data, hd.w, hd.h, up.alpha, up.box, w, h, def, ext * ext);
+    } else {
+      fg = new Uint8ClampedArray(hd.data.length);
+    }
+    const t1 = now();
+    timings['hd-fg'] = Math.round((t1 - t0) * 10) / 10;
+    const bg = fill ? inpaintColorHd(hd.data, hd.w, hd.h, fill, hole, grain) : new Uint8ClampedArray(hd.data);
+    timings['hd-bg'] = Math.round((now() - t1) * 10) / 10;
+    return { bg, fg };
   }
 }
 
@@ -207,10 +342,4 @@ function maskStats(alpha: Float32Array, w: number, h: number): MaskStats {
   return count
     ? { coverage: count / (w * h), center: [sx / count / w, sy / count / h] }
     : { coverage: 0, center: [0.5, 0.5] };
-}
-
-function opaqueCopy(src: Uint8ClampedArray): Uint8ClampedArray {
-  const out = src.slice();
-  for (let i = 3; i < out.length; i += 4) out[i] = 255;
-  return out;
 }

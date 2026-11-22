@@ -1,6 +1,6 @@
 /**
  * Image decoding: validates the file, decodes with the browser's native decoder (respecting EXIF
- * orientation), downscales to the working resolution and returns RGBA pixels.
+ * orientation), downscales to the processing resolution and to the output (HD) resolution and returns RGBA pixels.
  */
 import type { SourceImage } from '../core/types';
 
@@ -96,7 +96,17 @@ function extractAlpha(rgba: Uint8ClampedArray): Float32Array | null {
   return out;
 }
 
-export async function loadSourceImage(file: Blob, name: string, workingResolution: number): Promise<SourceImage> {
+/**
+ * Decodes once and produces both resolutions: `pixels` at the processing resolution and `hd` at `outputLongEdge`
+ * (the picture's own size capped there; never upscaled, never smaller than `pixels`). When both come out the same
+ * size, `hd` is the same object as `pixels`.
+ */
+export async function loadSourceImage(
+  file: Blob,
+  name: string,
+  workingResolution: number,
+  outputLongEdge: number = workingResolution,
+): Promise<SourceImage> {
   if (file.size === 0) throw new Error('The file is empty.');
   if (file.size > MAX_FILE_BYTES) {
     throw new Error(`The file is too large (${(file.size / 1048576).toFixed(0)} MB, max ${MAX_FILE_BYTES / 1048576} MB).`);
@@ -117,15 +127,23 @@ export async function loadSourceImage(file: Blob, name: string, workingResolutio
     if ((ow * oh) / 1e6 > MAX_MEGAPIXELS) {
       throw new Error(`The image is too large (${((ow * oh) / 1e6).toFixed(1)} MP, max ${MAX_MEGAPIXELS} MP).`);
     }
+    const long = Math.max(ow, oh);
     // Downscale only: never upsample beyond the original.
-    const scale = Math.min(1, workingResolution / Math.max(ow, oh));
+    const scale = Math.min(1, workingResolution / long);
     const w = Math.max(1, Math.round(ow * scale));
     const h = Math.max(1, Math.round(oh * scale));
-    // Transparent images: composite over white (as 2.5dwallpp does) and remember a meaningful alpha channel.
+    // Output size: the processing size at least, the source size at most.
+    const hdScale = Math.max(scale, Math.min(1, outputLongEdge / long));
+    const hw = Math.max(w, Math.round(ow * hdScale));
+    const hh = Math.max(h, Math.round(oh * hdScale));
+    const sameSize = hw === w && hh === h;
+
+    // Transparent images: composite over white (as 2.5dwallpp does) and remember a meaningful alpha channel
+    // (detected at processing resolution).
     const alpha = format === 'jpeg' ? null : extractAlpha(drawScaled(bitmap, w, h, null).getImageData(0, 0, w, h).data);
-    const ctx = drawScaled(bitmap, w, h, '#ffffff');
-    const pixels = ctx.getImageData(0, 0, w, h);
-    const image: SourceImage = { name, originalWidth: ow, originalHeight: oh, width: w, height: h, pixels, blob: file };
+    const pixels = drawScaled(bitmap, w, h, '#ffffff').getImageData(0, 0, w, h);
+    const hd = sameSize ? pixels : drawScaled(bitmap, hw, hh, '#ffffff').getImageData(0, 0, hw, hh);
+    const image: SourceImage = { name, originalWidth: ow, originalHeight: oh, width: w, height: h, pixels, hd, blob: file };
     if (alpha) imageAlpha.set(image, alpha);
     return image;
   } finally {

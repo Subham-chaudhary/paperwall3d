@@ -101,7 +101,7 @@ export function buildHole(alpha: Float32Array, w: number, h: number): HoleInfo {
 }
 
 /** Cheap integer hash to [-1, 1]. */
-function hashNoise(x: number, y: number): number {
+export function hashNoise(x: number, y: number): number {
   let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + 1274126177 * 7;
   h = Math.imul(h ^ (h >>> 13), 1103515245);
   h ^= h >>> 16;
@@ -109,7 +109,7 @@ function hashNoise(x: number, y: number): number {
 }
 
 /** Mean clipped pixel-to-pixel luma difference (subsampled): a robust grain estimate (0..1 units). */
-function estimateNoise(luma: Float32Array, w: number, h: number): number {
+export function estimateNoise(luma: Float32Array, w: number, h: number): number {
   let sum = 0;
   let cnt = 0;
   for (let y = 0; y < h; y += 3) {
@@ -123,7 +123,7 @@ function estimateNoise(luma: Float32Array, w: number, h: number): number {
 }
 
 /** Bilinear lookup table from full-res coordinates to a working-size grid (half-pixel centres). */
-function axisTaps(full: number, small: number, from: number, to: number): { i0: Int32Array; i1: Int32Array; t: Float32Array } {
+export function axisTaps(full: number, small: number, from: number, to: number): { i0: Int32Array; i1: Int32Array; t: Float32Array } {
   const len = to - from;
   const i0 = new Int32Array(len);
   const i1 = new Int32Array(len);
@@ -208,6 +208,30 @@ export function inpaintDepth(depth: Float32Array, info: HoleInfo): Float32Array 
   return out;
 }
 
+/** Core of the foreground (mask > 0.5 eroded by the defringe radius) and, for every pixel of `box`, its nearest core pixel. */
+export interface Defringe {
+  /** Padded bounding box of the object; `core` and `nearest` are box-sized. */
+  box: Box;
+  cw: number;
+  core: Uint8Array;
+  /** Index (in box coordinates) of the nearest core pixel. */
+  nearest: Int32Array;
+}
+
+/** Null when `radius` is 0, the mask is empty or the core is too small to take colours from. */
+export function buildDefringe(alpha: Float32Array, w: number, h: number, radius: number, pad = 4): Defringe | null {
+  if (radius <= 0) return null;
+  const box = alphaBox(alpha, w, h, 0, pad);
+  if (!box) return null;
+  const cw = box.x1 - box.x0;
+  const ch = box.y1 - box.y0;
+  const eroded = erodeBinary(cropBinary(alpha, w, box, 0.5), cw, ch, radius);
+  let c = 0;
+  for (let i = 0; i < eroded.length; i++) c += eroded[i]!;
+  if (c < 16) return null;
+  return { box, cw, core: eroded, nearest: nearestSite(eroded, cw, ch) };
+}
+
 /**
  * Foreground RGBA. The cut-out's edge pixels still hold background colour (a pale outline once the object moves),
  * so every pixel with alpha > 0 outside the core (mask eroded by `radius` px) takes the nearest colour from the core.
@@ -216,23 +240,10 @@ export function buildForeground(source: Uint8ClampedArray, alpha: Float32Array, 
   const n = w * h;
   const out = new Uint8ClampedArray(n * 4);
   out.set(source);
-  const box = radius > 0 ? alphaBox(alpha, w, h, 0, 4) : null;
-  let core: Uint8Array | null = null;
-  let nearest: Int32Array | null = null;
-  let cw = 0;
-  if (box) {
-    cw = box.x1 - box.x0;
-    const ch = box.y1 - box.y0;
-    const eroded = erodeBinary(cropBinary(alpha, w, box, 0.5), cw, ch, radius);
-    let c = 0;
-    for (let i = 0; i < eroded.length; i++) c += eroded[i]!;
-    if (c >= 16) {
-      core = eroded;
-      nearest = nearestSite(eroded, cw, ch);
-    }
-  }
   for (let i = 0; i < n; i++) out[i * 4 + 3] = alpha[i]! * 255 + 0.5;
-  if (box && core && nearest) {
+  const def = buildDefringe(alpha, w, h, radius);
+  if (def) {
+    const { box, cw, core, nearest } = def;
     for (let y = box.y0; y < box.y1; y++) {
       for (let x = box.x0; x < box.x1; x++) {
         const i = y * w + x;

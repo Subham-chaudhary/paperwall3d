@@ -18,17 +18,22 @@ ctx.onmessage = (ev: MessageEvent<ReconstructRequest>) => {
     if (req.type === 'setInputs') {
       reconstructor.setInputs(req.inputs);
       reply({ type: 'ready', id: req.id });
+    } else if (req.type === 'setHd') {
+      reconstructor.setHd(req.hd, req.width, req.height);
+      reply({ type: 'ready', id: req.id });
     } else {
       const output = reconstructor.run(req.params);
-      reply({ type: 'result', id: req.id, output }, [
+      const transfer: Transferable[] = [
         output.mask.buffer,
         output.depth.buffer,
-        output.bgColor.buffer,
         output.bgDepth.buffer,
-        output.fg.buffer,
         output.fgDepth.buffer,
         output.objDepth.buffer,
-      ]);
+      ];
+      // The (large) colour layers are only present when they changed.
+      if (output.bgColor) transfer.push(output.bgColor.buffer);
+      if (output.fg) transfer.push(output.fg.buffer);
+      reply({ type: 'result', id: req.id, output }, transfer);
     }
   } catch (err) {
     reply({ type: 'error', id: req.id, message: err instanceof Error ? err.message : String(err) });

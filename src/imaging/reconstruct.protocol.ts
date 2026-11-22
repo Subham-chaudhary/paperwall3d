@@ -3,6 +3,8 @@ import type { ReconstructInputs, ReconstructOutput, ReconstructParams } from './
 
 export type ReconstructRequest =
   | { type: 'setInputs'; id: number; inputs: ReconstructInputs }
+  /** Replace only the output-resolution pixels (null = same size as the processing pixels). */
+  | { type: 'setHd'; id: number; hd: Uint8ClampedArray | null; width: number; height: number }
   | { type: 'run'; id: number; params: ReconstructParams };
 
 export type ReconstructResponse =
