@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-11-22
+
+### Added
+- **HD output up to 4K.** The colour layers you see and export (the picture, the filled background plate and the cut-out object) now use your picture's own resolution, up to 4K (3840 px long edge). Smaller pictures are never upscaled. The AI and the editable maps (mask, depth) stay at the processing resolution, so sliders stay as fast as before.
+- **Output resolution setting** in Processing: Auto (source, max 4K), 1440p or 1080p. Changing it rebuilds the layers without re-running the AI models. On low-memory devices, Auto caps at 2560 px, and it never exceeds the GPU's texture limit.
+- **Crisp cut-out edges at 4K.** The object's edge is upsampled with a fast guided filter that uses the full-resolution photo as its guide, so fine edges such as hair stay sharp. Edge colours are defringed at full resolution.
+- **Full-resolution background fill.** The fill behind the object is computed small, then blended into the full-resolution photo only inside the hole. Everything outside the hole keeps the original pixels.
+- **Exports at output resolution:**
+  - Save PNG and F12 render at output size.
+  - GLB textures go up to 4096 px.
+  - The live HTML wallpaper embeds the HD colour. The cut-out is stored as JPEG colour plus a separate alpha image, which keeps a 4K wallpaper at about 2–7 MB, and the page sizes textures to the screen when it loads.
+- **Image info** shows the output and processing sizes, e.g. "Output: 3840 × 2560 px (source 6000 × 4000, capped at 4K)".
+
+### Changed
+- "Working resolution" is now called "Processing resolution".
+- Depth-only changes reuse the existing 4K colour textures instead of re-uploading them.
+
 ## [2.1.1] - 2026-11-22
 
 ### Changed

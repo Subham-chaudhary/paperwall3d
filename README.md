@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.1.1-0a6cff">
+  <img alt="version" src="https://img.shields.io/badge/version-2.2.0-0a6cff">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-ff1f6b">
   <img alt="runs" src="https://img.shields.io/badge/runs-100%25%20client--side-e6ff3b?labelColor=14104a">
   <img alt="netlify" src="https://img.shields.io/badge/deploy-Netlify-00d6f0?labelColor=14104a">
@@ -25,7 +25,7 @@ The flow follows 2.5dwallpp: open an image, land on the live **2D Parallax** vie
 
 | Step | What happens |
 | --- | --- |
-| **1. Open** | Load a JPG, PNG or WebP (open, drag and drop, or a recent project). The image is resized to the working resolution (default 1600 px). |
+| **1. Open** | Load a JPG, PNG or WebP (open, drag and drop, or a recent project). The AI and the editable maps run at the processing resolution (default 1600 px); the colour layers keep the picture's own resolution, up to 4K. |
 | **2. 1 · Object mask** | U²-NetP (fast, default) or U²-Net (accurate) finds the main object. Threshold, grow/shrink, feather, edge cleanup, flip-average, zoom-in pass and **Pick Object** shape the mask. |
 | **3. 2 · Object depth** | Depth Anything V2 Small estimates depth for the whole image (a heuristic fallback works offline). The object depth is its masked, edge-cleaned part. |
 | **4. Layers** | The object is cut out (defringed), the hole behind it is inpainted, and the result is a background plane plus an object layer. |
@@ -34,7 +34,7 @@ The flow follows 2.5dwallpp: open an image, land on the live **2D Parallax** vie
 | **7. config.json** | Every setting as commented JSON in a code editor, live two-way synced with the sliders. |
 | **8. Wallpaper Preview, then export** | A full-window preview in a desktop frame (with an optional clock overlay). Every export (live HTML wallpaper, GLB, PNG, config.json, `.pw3d.json`) goes through it first. |
 
-AI inference runs only when a model setting changes. Mask and depth post-processing settings re-split the cached model output (about half a second, no model run), and parallax, layers and 3D camera settings are instant GPU updates.
+Colour layers and every export use the picture's own resolution up to 4K (3840 px, never upscaled; set a lower cap with **Output resolution**), while the AI and the mask and depth maps run at the processing resolution. Changing the output resolution rebuilds the colour layers without running the models again. AI inference runs only when a model setting changes. Mask and depth post-processing settings re-split the cached model output (about half a second, no model run), and parallax, layers and 3D camera settings are instant GPU updates.
 
 ### Workflow
 
@@ -60,6 +60,7 @@ The list icon on the **Parallax** panel header (and *Open Image as Portrait / Pr
 - **config.json editor.** The 2.5dwallpp-compatible document (sections `parallax`, `layers`, `mask`, `depth`, `camera3d`) with a `//` comment above every key (range, step, options, default). Edits apply live. `//` comments, trailing commas and flat keys are accepted, out-of-range values are clamped and reported by path, and syntax errors show line and column. **Copy** keeps the comments, **Download** writes plain JSON, **Defaults** resets.
 - **Wallpaper Preview.** Frame aspect (this screen, 16:9, 16:10, 21:9, 32:9, phone, square), live cursor parallax, optional desktop clock overlay, and an export bar that hides when idle: **Save Live Wallpaper (.html)**, **Export GLB**, **Save PNG**, **Save config.json**, **Save .pw3d.json**.
 - **Live HTML wallpaper.** One self-contained `.html` with the parallax shader and the layers embedded (no external requests): mouse, then auto motion when idle, gyro on phones. It works in Wallpaper Engine, Lively or any browser.
+- **HD colour layers up to 4K.** The picture, background and object layers, the PNG, the GLB and the live wallpaper use the image's own resolution up to 4K. The AI and the maps stay at the processing resolution so editing stays fast.
 - **Projects.** Saved to IndexedDB with the analysis cached, so reopening a project skips the AI step.
 - **Import.** Accepts a `.pw3d.json` (version 1 or 2) or a bare 2.5dwallpp `config.json`.
 - **Blender interactions.** Drag sliders (Ctrl snaps to steps, Shift gives fine control) or click to type; **F3** searches every operator; **Z** opens the view pie; **N** toggles the sidebar; Ctrl+Z / Ctrl+Shift+Z undo and redo. Mask and depth sliders apply when you release them.
