@@ -103,3 +103,29 @@ export function pickFile(accept: string): Promise<File | null> {
 export function stripExtension(name: string): string {
   return name.replace(/\.pw3d\.json$/i, '').replace(/\.[^./\\]+$/, '');
 }
+
+/**
+ * Small canvas (long edge <= `max`) of an ImageData, downscaled by the browser without making a full-size canvas
+ * first (HD colour layers are up to 3840 px).
+ */
+export async function imageDataThumb(img: ImageData, max: number): Promise<HTMLCanvasElement> {
+  const s = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.width * s));
+  c.height = Math.max(1, Math.round(img.height * s));
+  const g = c.getContext('2d');
+  if (!g) return c;
+  try {
+    const bmp = await createImageBitmap(img, { resizeWidth: c.width, resizeHeight: c.height, resizeQuality: 'medium' });
+    g.drawImage(bmp, 0, 0);
+    bmp.close();
+  } catch {
+    const full = document.createElement('canvas');
+    full.width = img.width;
+    full.height = img.height;
+    full.getContext('2d')?.putImageData(img, 0, 0);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(full, 0, 0, c.width, c.height);
+  }
+  return c;
+}

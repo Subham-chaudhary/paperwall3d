@@ -1,7 +1,7 @@
 /** Bottom image-editor strip: 2D thumbnails of every pipeline layer; click one to open it larger. */
 import type { PreparedScene, StageView } from '../core/types';
 import type { AppContext } from './context';
-import { h } from './dom';
+import { h, imageDataThumb } from './dom';
 import { icon, type IconName } from './icons';
 import { openWindow } from './window';
 import { tip } from './widgets/tooltip';
@@ -34,13 +34,24 @@ function makeCanvas(w: number, hh: number): HTMLCanvasElement {
   return c;
 }
 
-/** Render a layer of the scene into a full-resolution canvas. */
+const COLOR_KINDS: Partial<Record<LayerKind, (scene: PreparedScene) => ImageData>> = {
+  source: (scene) => scene.source,
+  background: (scene) => scene.bgColor,
+  object: (scene) => scene.fg,
+};
+
+/** Render a layer of the scene into a full-resolution canvas (colour layers at output resolution, maps at processing resolution). */
 export function renderLayer(scene: PreparedScene, kind: LayerKind): HTMLCanvasElement {
   const { width: w, height: hh } = scene;
+  const color = COLOR_KINDS[kind]?.(scene);
+  if (color) {
+    const c = makeCanvas(color.width, color.height);
+    c.getContext('2d')?.putImageData(color, 0, 0);
+    return c;
+  }
   const c = makeCanvas(w, hh);
   const ctx = c.getContext('2d');
   if (!ctx) return c;
-  const putImage = (img: ImageData): void => ctx.putImageData(img, 0, 0);
   const putMap = (map: Float32Array): void => {
     const img = ctx.createImageData(w, hh);
     for (let i = 0; i < w * hh; i++) {
@@ -53,9 +64,6 @@ export function renderLayer(scene: PreparedScene, kind: LayerKind): HTMLCanvasEl
     ctx.putImageData(img, 0, 0);
   };
   switch (kind) {
-    case 'source':
-      putImage(scene.source);
-      break;
     case 'mask':
       putMap(scene.mask);
       break;
@@ -68,12 +76,6 @@ export function renderLayer(scene: PreparedScene, kind: LayerKind): HTMLCanvasEl
     }
     case 'depth':
       putMap(scene.depth);
-      break;
-    case 'background':
-      putImage(scene.bgColor);
-      break;
-    case 'object':
-      putImage(scene.fg);
       break;
   }
   return c;
@@ -90,6 +92,12 @@ function downscale(src: HTMLCanvasElement, max: number): HTMLCanvasElement {
     g.drawImage(src, 0, 0, c.width, c.height);
   }
   return c;
+}
+
+/** Thumbnail of a layer: colour layers are downscaled straight from the HD ImageData, maps from their small canvas. */
+async function renderThumb(scene: PreparedScene, kind: LayerKind, max: number): Promise<HTMLCanvasElement> {
+  const color = COLOR_KINDS[kind]?.(scene);
+  return color ? imageDataThumb(color, max) : downscale(renderLayer(scene, kind), max);
 }
 
 export function createImageStrip(ctx: AppContext): HTMLElement {
@@ -136,7 +144,7 @@ export function createImageStrip(ctx: AppContext): HTMLElement {
       const full = renderLayer(scene, k.id);
       const view = h('div', { class: 'pw-imgwin' + (k.checker ? ' checker' : '') }, full);
       openWindow({
-        title: `${k.label} — ${scene.width} × ${scene.height}`,
+        title: `${k.label} — ${full.width} × ${full.height}`,
         icon: k.icon,
         width: Math.min(900, Math.max(360, Math.round(window.innerWidth * 0.6))),
         height: Math.min(700, Math.max(300, Math.round(window.innerHeight * 0.65))),
@@ -149,20 +157,23 @@ export function createImageStrip(ctx: AppContext): HTMLElement {
   }
   body.appendChild(empty);
 
+  let refreshToken = 0;
   const refresh = (): void => {
     const scene = ctx.scene;
     const show = !!scene && !ctx.isDemo;
+    const token = ++refreshToken;
     body.classList.toggle('has-scene', show);
     if (!scene || !show) {
       canvases.forEach((holder) => holder.replaceChildren());
       return;
     }
-    for (const k of KINDS) {
-      const holder = canvases.get(k.id);
-      if (!holder) continue;
-      const small = downscale(renderLayer(scene, k.id), 320);
-      holder.replaceChildren(small);
-    }
+    void Promise.all(KINDS.map((k) => renderThumb(scene, k.id, 320).catch(() => null))).then((thumbs) => {
+      if (token !== refreshToken) return; // a newer scene is already being drawn
+      KINDS.forEach((k, i) => {
+        const t = thumbs[i];
+        if (t) canvases.get(k.id)?.replaceChildren(t);
+      });
+    });
   };
   // Thumbnails are throttled and skipped while the strip is collapsed (re-rendered when reopened).
   let dirty = false;

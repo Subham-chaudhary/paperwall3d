@@ -4,7 +4,8 @@
  * cursor parallax, optionally with a desktop-like clock overlay. A slim bar at the bottom (auto-hides after 2 s)
  * holds the export buttons.
  */
-import type { WallpaperAspect } from '../core/types';
+import { MAX_OUTPUT_LONG_EDGE } from '../core/output';
+import type { PreparedScene, WallpaperAspect } from '../core/types';
 import type { AppContext } from './context';
 import { clamp, h } from './dom';
 import { icon } from './icons';
@@ -39,15 +40,21 @@ export function frameAspect(aspect: WallpaperAspect): number {
   return m ? Number(m[1]) / Number(m[2]) : 16 / 9;
 }
 
-/** Pixel size of the exported still: the frame aspect, long edge = max(1920, screen long edge). */
-export function stillSize(aspect: WallpaperAspect): { width: number; height: number } {
-  const long = Math.min(7680, Math.max(1920, screen.width, screen.height));
+/**
+ * Pixel size of the exported still: the frame aspect, long edge = the output (colour-layer) long edge, at most 4K.
+ * When the screen is larger than the output the still is at least 1920 px, but never above 3840.
+ */
+export function stillSize(aspect: WallpaperAspect, scene: PreparedScene | null): { width: number; height: number } {
+  const outLong = scene ? Math.max(scene.colorWidth ?? scene.width, scene.colorHeight ?? scene.height) : 1920;
+  const screenLong = Math.max(screen.width, screen.height);
+  const floor = screenLong > outLong ? 1920 : 0;
+  const long = Math.min(MAX_OUTPUT_LONG_EDGE, Math.max(outLong, floor));
   const a = frameAspect(aspect);
   return a >= 1 ? { width: long, height: Math.round(long / a) } : { width: Math.round(long * a), height: long };
 }
 
 export async function saveWallpaperPng(ctx: AppContext): Promise<void> {
-  const { width, height } = stillSize(ctx.store.getValue('wallpaper.aspect'));
+  const { width, height } = stillSize(ctx.store.getValue('wallpaper.aspect'), ctx.isDemo ? null : ctx.scene);
   await ctx.renderImage(width, height);
 }
 
@@ -138,7 +145,7 @@ export function openWallpaperPreview(ctx: AppContext, opts: PreviewOptions = {})
   const exportBtns = [
     mk('Save Live Wallpaper (.html)', 'sparkle', 'Self-contained web wallpaper for Wallpaper Engine / Lively / any browser', () => ctx.exportHTML(), 'html', 'primary'),
     mk('Export GLB', 'cube', 'Export the layered meshes as a binary glTF (uses the 3D camera settings).', () => ctx.exportGLB(), 'glb'),
-    mk('Save PNG', 'aperture', 'Render a PNG of the wallpaper frame (long edge = your screen, at least 1920 px).', () => saveWallpaperPng(ctx), 'png'),
+    mk('Save PNG', 'aperture', 'Render a PNG at output resolution (up to 4K)', () => saveWallpaperPng(ctx), 'png'),
     mk('Save config.json', 'file', 'Save a plain 2.5dwallpp-compatible config.json.', () => ctx.exportConfigJson(), 'config'),
     mk('Save .pw3d.json', 'export', 'Save a reusable wallpaper config with the image and maps embedded.', () => ctx.exportConfig(true), 'pw3d'),
   ];

@@ -1,5 +1,6 @@
 /** Properties tabs backed by application state (image info, system). Settings fields live in the Scene tab categories. */
-import type { ModelCacheEntry } from '../../core/types';
+import { isLowMemoryDevice, LOW_MEMORY_LONG_EDGE, MAX_OUTPUT_LONG_EDGE, resolveOutputLongEdge } from '../../core/output';
+import type { ModelCacheEntry, SourceImage } from '../../core/types';
 import { formatBytes, h } from '../dom';
 import type { AppContext } from '../context';
 import { button } from '../widgets/controls';
@@ -20,6 +21,24 @@ function dynRow(label: string, text: () => string, updaters: (() => void)[]): HT
 
 const dims = (w: number, hh: number): string => `${w} × ${hh} px`;
 
+/** "3840 × 2560 px (source 6000 × 4000, capped at 4K)": the colour layers' size and why it is what it is. */
+function outputText(ctx: AppContext, src: SourceImage): string {
+  const out = src.hd ?? src.pixels;
+  const longOut = Math.max(out.width, out.height);
+  const longSrc = Math.max(src.originalWidth, src.originalHeight);
+  const rt = ctx.store.get().runtime;
+  const head = dims(out.width, out.height);
+  if (longOut >= longSrc) return `${head} (source size)`;
+  const source = `source ${src.originalWidth} × ${src.originalHeight}`;
+  let why: string;
+  if (rt.outputResolution !== 'auto') why = rt.outputResolution === 2560 ? 'capped at 1440p' : 'capped at 1080p';
+  else if (longOut >= MAX_OUTPUT_LONG_EDGE) why = 'capped at 4K';
+  else if (longOut === LOW_MEMORY_LONG_EDGE && isLowMemoryDevice()) why = 'low-memory device';
+  else if (longOut < resolveOutputLongEdge(rt.outputResolution, longSrc, rt.workingResolution)) why = 'GPU texture limit';
+  else why = 'processing size';
+  return `${head} (${source}, ${why})`;
+}
+
 export function imageTab(ctx: AppContext): HTMLElement {
   const upd: (() => void)[] = [];
   const refresh = (): void => upd.forEach((u) => u());
@@ -30,7 +49,8 @@ export function imageTab(ctx: AppContext): HTMLElement {
   const source = column(
     dynRow('Name', () => ctx.source?.name ?? (ctx.isDemo ? 'Demo scene' : '—'), upd),
     dynRow('Original', () => (ctx.source ? dims(ctx.source.originalWidth, ctx.source.originalHeight) : '—'), upd),
-    dynRow('Working', () => (ctx.source ? dims(ctx.source.width, ctx.source.height) : '—'), upd),
+    dynRow('Output', () => (ctx.source ? outputText(ctx, ctx.source) : '—'), upd),
+    dynRow('Processing', () => (ctx.source ? dims(ctx.source.width, ctx.source.height) : '—'), upd),
     dynRow('Main Object', () => (ctx.scene ? (ctx.scene.hasForeground ? `${(ctx.scene.coverage * 100).toFixed(1)} % of the image` : 'None (single layer)') : '—'), upd),
     h('div', { class: 'pw-spacer' }),
     spacedRow(

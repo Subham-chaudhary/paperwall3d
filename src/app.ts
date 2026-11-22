@@ -17,6 +17,7 @@ import { Emitter } from './core/events';
 import { cloneSettings, DEFAULT_SETTINGS, mergeSettings } from './core/defaults';
 import { PRESETS } from './core/presets';
 import { sanitizeSettings } from './core/schema';
+import { resolveOutputLongEdge } from './core/output';
 import { invalidation, SettingsStore } from './core/store';
 import type {
   BackendInfo,
@@ -49,7 +50,7 @@ import {
   type ProjectSummary,
 } from './persistence/projects';
 import type { AppContext, AppEvents, PresetId } from './ui/context';
-import { downloadBlob, stripExtension } from './ui/dom';
+import { downloadBlob, imageDataThumb, stripExtension } from './ui/dom';
 import { OperatorRegistry, registerOperators } from './ui/operators';
 import { closeWallpaperPreview } from './ui/preview';
 import { errorMessage, Reports } from './ui/reports';
@@ -101,6 +102,9 @@ export class App implements AppContext {
   private suppress = false;
   /** Status-bar message shown for the running job while the pipeline reports its stages (downloads keep their own text). */
   private jobMessage: string | null = null;
+  private maxTex: number | undefined;
+  /** A model-setting change is waiting for its debounced analysis: `raw` no longer matches the settings. */
+  private rawStale = false;
 
   private reconTimer: number | undefined;
   private analysisTimer: number | undefined;
@@ -236,13 +240,47 @@ export class App implements AppContext {
     if (this.suppress) return;
 
     const inv = invalidation(changed);
+    // Output resolution only changes the HD colour layers: reload the picture at the new size and keep `raw`.
+    const outputChanged = changed.includes('runtime.outputResolution');
     if (inv === 'analyze') {
       if (!this.source) return;
-      if (changed.includes('runtime.workingResolution')) void this.reloadAndAnalyze();
+      if (changed.includes('runtime.workingResolution') || outputChanged) void this.reloadAndAnalyze();
       else this.scheduleAnalysis();
+    } else if (outputChanged) {
+      if (this.source) void this.reloadOutput();
     } else if (inv === 'reconstruct') {
       this.scheduleReconstruct();
     }
+  }
+
+  /** Largest texture the GPU accepts (queried once from the renderer's own context); Infinity when unknown. */
+  private maxTextureSize(): number {
+    if (this.maxTex !== undefined) return this.maxTex;
+    let size = Infinity;
+    try {
+      const canvas = this.renderer?.canvas;
+      const gl = (canvas?.getContext('webgl2') ?? canvas?.getContext('webgl')) as WebGLRenderingContext | null | undefined;
+      const v = gl?.getParameter(gl.MAX_TEXTURE_SIZE) as unknown;
+      if (typeof v === 'number' && v > 0) size = v;
+    } catch {
+      /* unknown: no GPU cap */
+    }
+    this.maxTex = size;
+    return size;
+  }
+
+  /**
+   * Output (colour-layer) long edge to ask the pipeline for. The source size is not known before decoding, so it is
+   * passed as Infinity: the pipeline never upscales and clamps to the picture's own size.
+   */
+  private outputLongEdge(settings: Settings = this.store.get() as Settings): number {
+    const rt = settings.runtime;
+    return resolveOutputLongEdge(rt.outputResolution, Infinity, rt.workingResolution, this.maxTextureSize());
+  }
+
+  /** Decode a picture at the settings' processing and output resolutions. */
+  private loadSource(pipeline: IPipeline, file: Blob, name: string, settings: Settings = this.store.get() as Settings): Promise<SourceImage> {
+    return pipeline.loadImage(file, name, settings.runtime.workingResolution, this.outputLongEdge(settings));
   }
 
   /** Apply settings without triggering invalidation (the caller runs the pipeline itself). */
@@ -259,6 +297,7 @@ export class App implements AppContext {
 
   private scheduleAnalysis(): void {
     if (!this.source) return;
+    this.rawStale = true;
     window.clearTimeout(this.reconTimer);
     window.clearTimeout(this.analysisTimer);
     if (!this._busy) this.events.emit('progress', { stage: 'decode', progress: -1, message: REBUILD_MSG });
@@ -356,6 +395,7 @@ export class App implements AppContext {
     const raw = preset ?? (await pipeline.analyze(source, cloneSettings(this.store.get())));
     if (gen !== this.gen) return;
     this.raw = raw;
+    this.rawStale = false;
     if (this.backendInfo) {
       this.backendInfo = { ...this.backendInfo, active: raw.backendUsed };
       this.events.emit('backend', this.backendInfo);
@@ -381,12 +421,45 @@ export class App implements AppContext {
       const pipeline = this.getPipeline();
       const old = this.source;
       if (!pipeline || !old) return;
-      const src = await pipeline.loadImage(old.blob, old.name, this.store.getValue('runtime.workingResolution'));
+      const src = await this.loadSource(pipeline, old.blob, old.name);
       if (gen !== this.gen) return;
       this.source = src;
       this.raw = null;
       this.events.emit('image', src);
       await this.runAnalysis(gen);
+    });
+  }
+
+  /**
+   * Output resolution changed: re-decode the original at the new output size (same processing size), keep the
+   * analysis (no model run) and rebuild the layers.
+   */
+  private async reloadOutput(): Promise<void> {
+    const raw = this.raw;
+    const old0 = this.source;
+    if (!raw || !old0 || this.analyzing || this.rawStale) {
+      await this.reloadAndAnalyze(); // no usable analysis to keep (none yet, running, or a model setting is pending)
+      return;
+    }
+    const edge = Math.min(this.outputLongEdge(), Math.max(old0.originalWidth, old0.originalHeight));
+    const message = edge >= 3800 ? 'Building 4K layers…' : `Building ${edge} px layers…`;
+    await this.job('Could not rebuild the layers', message, async (gen) => {
+      const pipeline = this.getPipeline();
+      const old = this.source;
+      if (!pipeline || !old) return;
+      const src = await this.loadSource(pipeline, old.blob, old.name);
+      if (gen !== this.gen) return;
+      this.source = src; // the old HD pixels are released once the scene below replaces the old scene
+      this.events.emit('image', src);
+      if (raw.width !== src.width || raw.height !== src.height) {
+        this.raw = null;
+        await this.runAnalysis(gen); // processing size differs from the kept analysis: cannot reuse it
+        return;
+      }
+      const scene = await pipeline.reconstruct(src, raw, cloneSettings(this.store.get()));
+      if (gen !== this.gen) return;
+      this.applyScene(scene);
+      this.reports.success(this.doneMessage(null, scene));
     });
   }
 
@@ -431,7 +504,7 @@ export class App implements AppContext {
         await this.applySettingsSilently(preset.settings);
         this.reports.success(`Applied preset: ${preset.label} (starting point)`);
       }
-      const src = await pipeline.loadImage(file, fileName, this.store.getValue('runtime.workingResolution'));
+      const src = await this.loadSource(pipeline, file, fileName);
       if (gen !== this.gen) return;
       this.source = src;
       this.raw = null;
@@ -625,7 +698,7 @@ export class App implements AppContext {
     closeWallpaperPreview();
     await this.job('Could not open project', UPLOAD_MSG, async (gen) => {
       await this.applySettingsSilently(settings);
-      const src = await pipeline.loadImage(rec.sourceBlob, rec.name, settings.runtime.workingResolution);
+      const src = await this.loadSource(pipeline, rec.sourceBlob, rec.name, settings);
       if (gen !== this.gen) return;
       this.source = src;
       this.raw = null;
@@ -660,18 +733,10 @@ export class App implements AppContext {
     }, AUTOSAVE_DEBOUNCE_MS);
   }
 
-  private makeThumbnail(): Promise<Blob | null> {
+  private async makeThumbnail(): Promise<Blob | null> {
     const scene = this.scene;
-    if (!scene || this.isDemo) return Promise.resolve(null);
-    const full = document.createElement('canvas');
-    full.width = scene.source.width;
-    full.height = scene.source.height;
-    full.getContext('2d')?.putImageData(scene.source, 0, 0);
-    const s = Math.min(1, 256 / Math.max(full.width, full.height));
-    const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(full.width * s));
-    c.height = Math.max(1, Math.round(full.height * s));
-    c.getContext('2d')?.drawImage(full, 0, 0, c.width, c.height);
+    if (!scene || this.isDemo) return null;
+    const c = await imageDataThumb(scene.source, 256); // downscaled straight from the HD pixels
     return new Promise((resolve) => c.toBlob((b) => resolve(b), 'image/jpeg', 0.8));
   }
 
@@ -728,7 +793,7 @@ export class App implements AppContext {
       this.setPicking(false);
       await this.job('Could not import config', UPLOAD_MSG, async (gen) => {
         const blob = await dataUrlToBlob(srcUrl);
-        const src = await pipeline.loadImage(blob, parsed.name, settings.runtime.workingResolution);
+        const src = await this.loadSource(pipeline, blob, parsed.name, settings);
         if (gen !== this.gen) return;
         this.source = src;
         this.raw = null;
@@ -755,7 +820,7 @@ export class App implements AppContext {
       });
     } else if (this.source) {
       this.reports.success(`Applied settings from "${parsed.name}"`);
-      this.startAnalysis();
+      void this.reloadAndAnalyze(); // also re-decodes when the processing / output resolution changed
     } else {
       this.reports.success(`Loaded settings from "${parsed.name}". Open an image to apply them.`);
     }
@@ -784,7 +849,15 @@ export class App implements AppContext {
     this.reports.info('Rendering PNG…');
     const blob = await this.renderer.screenshot(width, height);
     downloadBlob(blob, `${this.fileBase()}.png`);
-    this.reports.success('Rendered image saved');
+    let size = '';
+    try {
+      const bmp = await createImageBitmap(blob);
+      size = ` (${bmp.width} × ${bmp.height} px)`;
+      bmp.close();
+    } catch {
+      if (width && height) size = ` (${width} × ${height} px)`;
+    }
+    this.reports.success(`Rendered image saved${size}`);
   }
 
   private fileBase(): string {
