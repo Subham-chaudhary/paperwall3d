@@ -1,18 +1,23 @@
-/** Shared option lists for view modes and camera modes (headers, pie menu, properties, operators). */
-import type { CameraMode, ViewMode } from '../core/types';
+/** Shared option lists for views and pipeline stages (viewport header, pie menu, operators). */
+import type { StageView, ViewMode } from '../core/types';
 import type { EnumOption } from './widgets/controls';
 
 export const VIEW_MODES: readonly EnumOption<ViewMode>[] = [
-  { value: 'render', label: 'Rendered', icon: 'aperture' },
-  { value: 'depth', label: 'Depth', icon: 'shadedSphere' },
-  { value: 'mask', label: 'Mask', icon: 'mask' },
-  { value: 'wireframe', label: 'Wireframe', icon: 'wireframe' },
-  { value: 'layers', label: 'Layers', icon: 'layers' },
+  { value: '2d', label: '2D Parallax', icon: 'imageEditor' },
+  { value: '3d', label: '3D Camera', icon: 'view3d' },
+  { value: 'config', label: 'config.json', icon: 'file' },
 ];
 
-export const CAMERA_MODES: readonly EnumOption<CameraMode>[] = [
-  { value: 'cursor', label: 'Cursor Follow', icon: 'cursor' },
-  { value: 'orbit', label: 'Orbit (Drag)', icon: 'orbit' },
-  { value: 'auto', label: 'Auto Animate', icon: 'refresh' },
-  { value: 'static', label: 'Static', icon: 'lock' },
+export const STAGES: readonly EnumOption<StageView>[] = [
+  { value: 'result', label: 'Result', icon: 'aperture' },
+  { value: 'mask', label: '1 · Main object mask', icon: 'mask' },
+  { value: 'objdepth', label: '2 · Object depth (masked)', icon: 'depth' },
+  { value: 'depth', label: 'Whole-image depth', icon: 'shadedSphere' },
 ];
+
+export const STAGE_SHORT: Record<StageView, string> = {
+  result: 'Result',
+  mask: 'Mask',
+  objdepth: 'Object Depth',
+  depth: 'Whole Depth',
+};

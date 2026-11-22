@@ -67,15 +67,23 @@
   width: 100%;
   height: 100%;
 }
-.pw-vp-main[data-tool='orbit'] .pw-vp-host,
-.pw-vp-main[data-tool='light'] .pw-vp-host {
+.pw-vp-main[data-view='3d'] .pw-vp-host {
   cursor: grab;
 }
-.pw-vp-main.dragging .pw-vp-host {
+.pw-vp-main[data-view='3d'] .pw-vp-host:active {
   cursor: grabbing;
 }
-.pw-vp-main[data-tool='measure'] .pw-vp-host {
+.pw-vp-main.picking .pw-vp-host {
   cursor: crosshair;
+}
+.pw-vp-main.picking::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(10, 108, 255, 0.35), inset 0 0 24px rgba(10, 108, 255, 0.25);
+  pointer-events: none;
+  z-index: 5;
 }
 
 .pw-vp-overlay {
@@ -291,8 +299,3 @@
   color: var(--text-on-accent);
 }
 
-.pw-app.fullscreen .pw-vp-main {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-}

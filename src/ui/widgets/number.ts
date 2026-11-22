@@ -22,6 +22,12 @@ export interface NumberOpts {
   /** Display multiplier (e.g. 100 to show a 0..1 fraction as a percentage). */
   scale?: number;
   integer?: boolean;
+  /** Snap every committed value to the step grid (min + n * step), as the config.json clamping does. */
+  snap?: boolean;
+  /** Readout as (+value).toString(): no fixed decimals, no unit, trailing zeros dropped (2.5dwallpp style). */
+  plain?: boolean;
+  /** While dragging only the readout moves; the value is committed to the binding on release (the `change` event). */
+  defer?: boolean;
   /** Factor slider with blue fill. */
   slider?: boolean;
   /** Label shown at the left inside the field. */
@@ -62,10 +68,13 @@ export function numberField(o: NumberOpts): Widget {
   );
   tip(el, o.tip);
 
-  const fmt = (v: number): string => (v * scale).toFixed(precision) + unit;
+  const fmt = (v: number): string => (o.plain ? String(Number((v * scale).toFixed(6))) : (v * scale).toFixed(precision) + unit);
+
+  /** Value shown while a deferred drag is in progress (not yet committed). */
+  let live: number | null = null;
 
   const refresh = (): void => {
-    const v = o.bind.get();
+    const v = live ?? o.bind.get();
     value.textContent = fmt(v);
     fill.style.width = `${clamp(((v - o.min) / range) * 100, 0, 100)}%`;
     el.setAttribute('aria-valuenow', String(v));
@@ -73,7 +82,8 @@ export function numberField(o: NumberOpts): Widget {
 
   const quantize = (v: number): number => {
     let r = clamp(v, o.min, o.max);
-    if (integer) r = Math.round(r);
+    if (o.snap) r = clamp(Number((Math.round((r - o.min) / step) * step + o.min).toFixed(6)), o.min, o.max);
+    else if (integer) r = Math.round(r);
     else r = Math.round(r * 1e6) / 1e6;
     return r;
   };
@@ -152,7 +162,11 @@ export function numberField(o: NumberOpts): Widget {
       lastX = ev.clientX;
       const width = Math.max(60, el.clientWidth);
       acc = clamp(acc + dx * (range / width) * (ev.shiftKey ? 0.1 : 1), o.min, o.max);
-      commit(ev.ctrlKey || ev.metaKey ? Math.round(acc / step) * step : acc);
+      const next = ev.ctrlKey || ev.metaKey ? Math.round(acc / step) * step : acc;
+      if (o.defer) {
+        live = quantize(next);
+        refresh();
+      } else commit(next);
     };
     const onUp = (ev: PointerEvent): void => {
       el.releasePointerCapture(e.pointerId);
@@ -160,7 +174,15 @@ export function numberField(o: NumberOpts): Widget {
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onUp);
       el.classList.remove('dragging');
-      if (dragged) return;
+      if (dragged) {
+        if (live !== null) {
+          const v = live;
+          live = null;
+          o.bind.set(v);
+          refresh();
+        }
+        return;
+      }
       if (clickedArrow) stepBy(clickedArrow === 'left' ? -1 : 1, ev.shiftKey ? 0.1 : ev.ctrlKey ? 10 : 1);
       else startEdit();
     };

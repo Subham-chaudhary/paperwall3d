@@ -49,7 +49,7 @@ export function openAbout(_ctx: AppContext): void {
         h('div', { class: 'pw-about-version', text: `Version ${APP_VERSION}` }),
       ),
     ),
-    h('p', { class: 'pw-note', text: 'Turn any image into a depth-aware 2.5D parallax 3D wallpaper using in-browser AI. Segmentation and depth estimation run on your device through ONNX Runtime Web (WebGPU with WASM fallback); the scene is rendered with Three.js.' }),
+    h('p', { class: 'pw-note', text: 'Turn any image into a depth-aware 2.5D parallax wallpaper using in-browser AI (2D parallax view, 3D camera view, 2.5dwallpp-compatible config.json). Object masking and depth estimation run on your device through ONNX Runtime Web (WebGPU with WASM fallback); the scene is rendered with Three.js.' }),
     h('p', { class: 'pw-note privacy', text: 'Privacy: all processing happens on your device. Your images are never uploaded.' }),
     h('h4', { class: 'pw-dialog-h', text: 'Third-party licenses' }),
     licenseTable(),

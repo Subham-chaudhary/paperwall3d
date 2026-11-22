@@ -5,17 +5,9 @@ import { icon, type IconName } from '../icons';
 import type { PropTab } from '../state';
 import { tip } from '../widgets/tooltip';
 import { appendHeaderSearch } from './search';
-import { imageTab, outputTab, systemTab } from './appTabs';
+import { imageTab, systemTab, wallpaperTab } from './appTabs';
 import { Fields } from './fields';
-import {
-  cameraTab,
-  depthTab,
-  geometryTab,
-  lightingTab,
-  reconstructionTab,
-  segmentationTab,
-  viewTab,
-} from './settingsTabs';
+import { sceneTab } from './settingsTabs';
 
 export interface TabDef {
   id: PropTab;
@@ -24,30 +16,18 @@ export interface TabDef {
 }
 
 export const TABS: readonly TabDef[] = [
-  { id: 'image', label: 'Tool / Image', icon: 'wrench' },
-  { id: 'segmentation', label: 'Segmentation', icon: 'selectBox' },
-  { id: 'depth', label: 'Depth', icon: 'depth' },
-  { id: 'reconstruction', label: 'Reconstruction', icon: 'patch' },
-  { id: 'geometry', label: 'Geometry', icon: 'mesh' },
-  { id: 'lighting', label: 'Lighting', icon: 'sun' },
-  { id: 'camera', label: 'Camera', icon: 'camera' },
-  { id: 'view', label: 'View', icon: 'view3d' },
-  { id: 'output', label: 'Output / Export', icon: 'printer' },
-  { id: 'system', label: 'System / Runtime', icon: 'cpu' },
+  { id: 'scene', label: 'Scene', icon: 'scene' },
+  { id: 'image', label: 'Image', icon: 'image' },
+  { id: 'wallpaper', label: 'Wallpaper', icon: 'fullscreen' },
+  { id: 'system', label: 'System', icon: 'cpu' },
 ];
 
 export function createProperties(ctx: AppContext): HTMLElement {
-  const f = new Fields(ctx.store);
+  const f = new Fields(ctx);
   const pages: Record<PropTab, HTMLElement> = {
+    scene: sceneTab(ctx, f),
     image: imageTab(ctx, f),
-    segmentation: segmentationTab(f),
-    depth: depthTab(f),
-    reconstruction: reconstructionTab(f),
-    geometry: geometryTab(f),
-    lighting: lightingTab(f),
-    camera: cameraTab(f),
-    view: viewTab(f),
-    output: outputTab(ctx),
+    wallpaper: wallpaperTab(ctx, f),
     system: systemTab(ctx, f),
   };
 

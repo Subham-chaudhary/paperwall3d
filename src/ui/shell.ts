@@ -12,6 +12,8 @@ import { createStatusBar } from './statusbar';
 import { createToolbar } from './toolbar';
 import { createViewport, type ViewportParts } from './viewport';
 import { isMenuOpen } from './widgets/menu';
+import { PREVIEW_ALLOWED } from './operators';
+import { workspaceFor } from './state';
 
 export interface Shell {
   root: HTMLElement;
@@ -106,33 +108,37 @@ export function createShell(ctx: AppContext): Shell {
   root.append(topbar, main, statusbar);
 
   ctx.ui.on('drawer', (open) => root.classList.toggle('drawer-open', open));
-  ctx.ui.on('fullscreen', (on) => root.classList.toggle('fullscreen', on));
   ctx.ui.on('strip', applyLayout);
   applyLayout();
 
-  // Keep UI state in sync when the user leaves browser fullscreen with Esc/F11.
-  document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement && ctx.ui.fullscreen) ctx.ui.setFullscreen(false);
+  // The workspace tab follows the view / stage (header switch, Show Stage, pie, outliner...).
+  ctx.store.subscribe((st, changed) => {
+    if (ctx.ui.previewOpen || !changed.some((p) => p === 'view.mode' || p === 'view.stage')) return;
+    ctx.ui.setWorkspace(workspaceFor(st.view.mode, st.view.stage, ctx.ui.workspace));
   });
 
   // ── global shortcuts ──
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && ctx.ui.fullscreen && !isMenuOpen()) {
-      e.preventDefault();
-      ctx.ops.run('view.fullscreen_preview');
-      return;
+    if (e.key === 'Escape' && !isMenuOpen()) {
+      if (ctx.ui.picking) {
+        e.preventDefault();
+        ctx.setPicking(false);
+        return;
+      }
+      if (ctx.ui.drawerOpen) {
+        ctx.ui.setDrawer(false);
+        return;
+      }
     }
-    if (e.key === 'Escape' && ctx.ui.drawerOpen) {
-      ctx.ui.setDrawer(false);
-      return;
-    }
-    ctx.ops.handleKey(e);
+    ctx.ops.handleKey(e, ctx.ui.previewOpen ? (id) => PREVIEW_ALLOWED.has(id) : undefined);
   });
 
-  // Right-click context menu in the viewport is replaced by the pie menu; suppress the browser menu there.
+  // Right-click in the 2D view opens the pie menu. The 3D view keeps right-drag for panning, the config editor its native menu.
   viewport.el.addEventListener('contextmenu', (e) => {
+    const mode = ctx.store.getValue('view.mode');
+    if (mode === 'config' && (e.target as HTMLElement).closest('.pw-cfg')) return;
     e.preventDefault();
-    ctx.ops.run('view.pie');
+    if (mode === '2d') ctx.ops.run('view.pie');
   });
 
   return { root, viewport };

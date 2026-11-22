@@ -1,12 +1,12 @@
 /** Bottom image-editor strip: 2D thumbnails of every pipeline layer; click one to open it larger. */
-import type { PreparedScene } from '../core/types';
+import type { PreparedScene, StageView } from '../core/types';
 import type { AppContext } from './context';
 import { h } from './dom';
 import { icon, type IconName } from './icons';
 import { openWindow } from './window';
 import { tip } from './widgets/tooltip';
 
-type LayerKind = 'source' | 'mask' | 'depth' | 'background' | 'foreground';
+type LayerKind = 'source' | 'mask' | 'objdepth' | 'depth' | 'background' | 'object';
 
 interface KindDef {
   id: LayerKind;
@@ -14,14 +14,17 @@ interface KindDef {
   icon: IconName;
   /** Transparent layers get a checkerboard backdrop. */
   checker?: boolean;
+  /** Clicking shows this stage in the 2D view instead of opening a window. */
+  stage?: StageView;
 }
 
 const KINDS: KindDef[] = [
   { id: 'source', label: 'Source', icon: 'image' },
-  { id: 'mask', label: 'Mask', icon: 'mask' },
-  { id: 'depth', label: 'Depth', icon: 'depth' },
-  { id: 'background', label: 'Background (Inpainted)', icon: 'mesh' },
-  { id: 'foreground', label: 'Foreground', icon: 'mesh', checker: true },
+  { id: 'mask', label: 'Mask', icon: 'mask', stage: 'mask' },
+  { id: 'objdepth', label: 'Object Depth', icon: 'depth', stage: 'objdepth' },
+  { id: 'depth', label: 'Whole Depth', icon: 'shadedSphere', stage: 'depth' },
+  { id: 'background', label: 'Background', icon: 'mesh' },
+  { id: 'object', label: 'Object', icon: 'mesh', checker: true },
 ];
 
 function makeCanvas(w: number, hh: number): HTMLCanvasElement {
@@ -56,14 +59,21 @@ export function renderLayer(scene: PreparedScene, kind: LayerKind): HTMLCanvasEl
     case 'mask':
       putMap(scene.mask);
       break;
+    case 'objdepth': {
+      // Object depth, shown only inside the object (black elsewhere).
+      const m = new Float32Array(w * hh);
+      for (let i = 0; i < m.length; i++) m[i] = (scene.objDepth[i] ?? 0) * Math.min(1, (scene.mask[i] ?? 0) * 4);
+      putMap(m);
+      break;
+    }
     case 'depth':
       putMap(scene.depth);
       break;
     case 'background':
-      putImage(scene.background);
+      putImage(scene.bgColor);
       break;
-    case 'foreground':
-      putImage(scene.foreground);
+    case 'object':
+      putImage(scene.fg);
       break;
   }
   return c;
@@ -89,7 +99,7 @@ export function createImageStrip(ctx: AppContext): HTMLElement {
     { class: 'pw-area-header pw-strip-header', attrs: { role: 'button', tabindex: 0 } },
     toggleIcon,
     h('span', { class: 'pw-editor-type' }, icon('imageEditor', 14), h('span', { text: 'Image Editor' })),
-    h('span', { class: 'pw-strip-sub', text: 'Pipeline layers' }),
+    h('span', { class: 'pw-strip-sub', text: 'Pipeline layers · click Mask / Depth to show the stage' }),
   );
   tip(header, { desc: 'Show or hide the layer thumbnails', extra: 'Ctrl T' });
   const toggle = (): void => ctx.ui.setStrip(!ctx.ui.stripOpen);
@@ -103,6 +113,7 @@ export function createImageStrip(ctx: AppContext): HTMLElement {
 
   const body = h('div', { class: 'pw-strip-body' });
   const canvases = new Map<LayerKind, HTMLElement>();
+  const cards = new Map<LayerKind, HTMLElement>();
   const empty = h('div', { class: 'pw-strip-empty', text: 'Open an image to see its layers' });
 
   for (const k of KINDS) {
@@ -113,10 +124,15 @@ export function createImageStrip(ctx: AppContext): HTMLElement {
       h('div', { class: 'pw-thumb-header' }, icon(k.icon, 12), h('span', { text: k.label })),
       holder,
     );
-    tip(card, { desc: `Open ${k.label} in a larger window` });
+    tip(card, { desc: k.stage ? `Show ${k.label} as the stage in the 2D view` : `Open ${k.label} in a larger window` });
+    cards.set(k.id, card);
     card.addEventListener('click', () => {
       const scene = ctx.scene;
       if (!scene || ctx.isDemo) return;
+      if (k.stage) {
+        ctx.showView('2d', k.stage);
+        return;
+      }
       const full = renderLayer(scene, k.id);
       const view = h('div', { class: 'pw-imgwin' + (k.checker ? ' checker' : '') }, full);
       openWindow({
@@ -164,6 +180,12 @@ export function createImageStrip(ctx: AppContext): HTMLElement {
     toggleIcon.replaceChildren(icon(ctx.ui.stripOpen ? 'triDown' : 'triRight', 12));
     if (ctx.ui.stripOpen && dirty) schedule();
   };
+  const syncActive = (): void => {
+    const on = ctx.store.getValue('view.mode') === '2d' ? ctx.store.getValue('view.stage') : null;
+    for (const k of KINDS) cards.get(k.id)?.classList.toggle('active', !!k.stage && k.stage === on);
+  };
+  ctx.store.subscribe((_s, c) => c.some((p) => p === 'view.mode' || p === 'view.stage') && syncActive());
+  syncActive();
   ctx.ui.on('strip', syncOpen);
   ctx.events.on('scene', schedule);
   syncOpen();

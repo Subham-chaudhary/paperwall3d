@@ -1,39 +1,43 @@
-/** Ephemeral UI state (active workspace, tab, tool, panel visibility) with change events. */
+/** Ephemeral UI state (active workspace, tab, picking, preview, panel visibility) with change events. */
 import { Emitter } from '../core/events';
-import type { ViewMode } from '../core/types';
+import type { StageView, ViewMode } from '../core/types';
 import { DEFAULT_LAYOUT, getPref, setPref, type LayoutPrefs } from '../persistence/prefs';
 import type { IconName } from './icons';
 
-export type Workspace = 'layout' | 'segmentation' | 'depth' | 'shading' | 'export';
-export type PropTab =
-  | 'image'
-  | 'segmentation'
-  | 'depth'
-  | 'reconstruction'
-  | 'geometry'
-  | 'lighting'
-  | 'camera'
-  | 'view'
-  | 'output'
-  | 'system';
-export type Tool = 'select' | 'orbit' | 'light' | 'brush' | 'measure';
-export type LayerId = 'camera' | 'keyLight' | 'rimLight' | 'background' | 'foreground' | 'depth' | 'mask';
+export type Workspace = 'layout' | 'mask' | 'depth' | 'camera3d' | 'config' | 'export';
+export type PropTab = 'scene' | 'image' | 'wallpaper' | 'system';
+/** Collapsible panels of the Scene tab. */
+export type ScenePanel = 'parallax' | 'layers' | 'mask' | 'depth' | 'camera3d';
+export type LayerId = 'camera' | 'background' | 'foreground' | 'depth' | 'mask';
 export type OutlinerId = 'scene' | LayerId;
 
 export interface WorkspaceDef {
   id: Workspace;
   label: string;
-  tab: PropTab;
-  mode: ViewMode;
+  /** Scene-tab panel the workspace scrolls to / expands. */
+  panel?: ScenePanel;
+  /** View + stage the workspace switches to (undefined = unchanged). Export opens the wallpaper preview instead. */
+  mode?: ViewMode;
+  stage?: StageView;
 }
 
 export const WORKSPACES: readonly WorkspaceDef[] = [
-  { id: 'layout', label: 'Layout', tab: 'image', mode: 'render' },
-  { id: 'segmentation', label: 'Segmentation', tab: 'segmentation', mode: 'mask' },
-  { id: 'depth', label: 'Depth', tab: 'depth', mode: 'depth' },
-  { id: 'shading', label: 'Shading', tab: 'lighting', mode: 'render' },
-  { id: 'export', label: 'Export', tab: 'output', mode: 'render' },
+  { id: 'layout', label: 'Layout', panel: 'parallax', mode: '2d', stage: 'result' },
+  { id: 'mask', label: '1 · Mask', panel: 'mask', mode: '2d', stage: 'mask' },
+  { id: 'depth', label: '2 · Depth', panel: 'depth', mode: '2d', stage: 'objdepth' },
+  { id: 'camera3d', label: '3D Camera', panel: 'camera3d', mode: '3d' },
+  { id: 'config', label: 'Config', mode: 'config' },
+  { id: 'export', label: 'Export' },
 ];
+
+/** Which workspace best describes the current view/stage. */
+export function workspaceFor(mode: ViewMode, stage: StageView, current: Workspace): Workspace {
+  if (mode === '3d') return 'camera3d';
+  if (mode === 'config') return 'config';
+  if (stage === 'mask') return 'mask';
+  if (stage === 'objdepth' || stage === 'depth') return 'depth';
+  return current === 'mask' || current === 'depth' || current === 'camera3d' || current === 'config' ? 'layout' : current;
+}
 
 export interface HintItem {
   icon: IconName;
@@ -43,30 +47,32 @@ export interface HintItem {
 export interface UIEvents extends Record<string, unknown> {
   workspace: Workspace;
   tab: PropTab;
-  tool: Tool;
+  /** Reveal (expand + scroll to) a Scene-tab panel. */
+  reveal: ScenePanel;
   sidebar: boolean;
   strip: boolean;
-  fullscreen: boolean;
   drawer: boolean;
   selection: OutlinerId;
   layers: Record<LayerId, boolean>;
   hint: HintItem[];
   layout: LayoutPrefs;
+  /** Pick Object mode toggled. */
+  picking: boolean;
+  /** The wallpaper preview overlay opened or closed. */
+  preview: boolean;
 }
 
 export class UIState extends Emitter<UIEvents> {
   workspace: Workspace = 'layout';
-  tab: PropTab = 'image';
-  tool: Tool = 'select';
+  tab: PropTab = 'scene';
   selection: OutlinerId = 'scene';
-  fullscreen = false;
   drawerOpen = false;
+  picking = false;
+  previewOpen = false;
   layout: LayoutPrefs;
   /** UI-side visibility of scene layers (eye toggles in the outliner). */
   layers: Record<LayerId, boolean> = {
     camera: true,
-    keyLight: true,
-    rimLight: true,
     background: true,
     foreground: true,
     depth: false,
@@ -98,10 +104,9 @@ export class UIState extends Emitter<UIEvents> {
     this.emit('tab', t);
   }
 
-  setTool(t: Tool): void {
-    if (this.tool === t) return;
-    this.tool = t;
-    this.emit('tool', t);
+  reveal(p: ScenePanel): void {
+    this.setTab('scene');
+    this.emit('reveal', p);
   }
 
   select(id: OutlinerId): void {
@@ -119,15 +124,21 @@ export class UIState extends Emitter<UIEvents> {
     this.emit('strip', open);
   }
 
-  setFullscreen(on: boolean): void {
-    if (this.fullscreen === on) return;
-    this.fullscreen = on;
-    this.emit('fullscreen', on);
-  }
-
   setDrawer(open: boolean): void {
     this.drawerOpen = open;
     this.emit('drawer', open);
+  }
+
+  setPicking(on: boolean): void {
+    if (this.picking === on) return;
+    this.picking = on;
+    this.emit('picking', on);
+  }
+
+  setPreview(on: boolean): void {
+    if (this.previewOpen === on) return;
+    this.previewOpen = on;
+    this.emit('preview', on);
   }
 
   setLayerVisible(id: LayerId, visible: boolean): void {

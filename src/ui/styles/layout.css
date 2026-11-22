@@ -195,6 +195,7 @@
   background: var(--accent);
   color: var(--text-on-accent);
 }
+.pw-tool[disabled],
 .pw-tool.disabled {
   color: var(--text-disabled);
 }
@@ -300,22 +301,6 @@
   width: 150px;
   margin-left: 4px;
   flex: 0 1 150px;
-}
-
-/* Fullscreen preview: only the viewport remains. */
-.pw-app.fullscreen {
-  grid-template-rows: 0 minmax(0, 1fr) 0;
-}
-.pw-app.fullscreen .pw-topbar,
-.pw-app.fullscreen .pw-statusbar,
-.pw-app.fullscreen .pw-toolbar,
-.pw-app.fullscreen .pw-right,
-.pw-app.fullscreen .pw-split-right,
-.pw-app.fullscreen .pw-split-strip,
-.pw-app.fullscreen .pw-strip-area,
-.pw-app.fullscreen .pw-vp-header,
-.pw-app.fullscreen .pw-vp-overlay {
-  display: none !important;
 }
 
 /* Narrow screens: the right column becomes a toggleable drawer. */

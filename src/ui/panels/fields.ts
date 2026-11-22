@@ -1,85 +1,89 @@
-/** Factory that turns a Settings path into a ready-made property row (label + bound widget). */
+/**
+ * Generic field builder: turns a Settings path into a ready-made property row (label + bound widget), driven by
+ * SCHEMA (label, description, range, step, unit, options, "re-runs the model" flag).
+ */
+import { fieldSchema, type FieldSchema } from '../../core/schema';
 import type { SettingsStore } from '../../core/store';
 import type { SettingsPath } from '../../core/types';
-import { checkbox, colorField, enumField, segmented, type EnumOption } from '../widgets/controls';
-import { settingsBinding, type BoolPath, type NumPath, type StrPath } from '../widgets/binding';
-import { propRow } from '../widgets/layout';
+import type { AppContext } from '../context';
+import { h } from '../dom';
+import { icon } from '../icons';
+import { settingsBinding } from '../widgets/binding';
+import { checkbox, colorField, enumField } from '../widgets/controls';
 import { numberField, type Widget } from '../widgets/number';
-import type { TipSpec } from '../widgets/tooltip';
+import { tip, type TipSpec } from '../widgets/tooltip';
 
-export interface NumSpec {
-  min: number;
-  max: number;
-  step?: number;
-  precision?: number;
-  unit?: string;
-  scale?: number;
-  integer?: boolean;
-  slider?: boolean;
-  desc: string;
+const decimals = (step: number): number => (String(step).split('.')[1] ?? '').length;
+
+/** Small badge marking settings that re-run an AI model when changed. */
+export function modelBadge(): HTMLElement {
+  const b = h('span', { class: 'pw-model-badge' }, icon('cpu', 10));
+  tip(b, { title: 'Re-runs the model', desc: 'Changing this runs the AI model again (a few seconds). Other settings only re-split the cached model output or update the view.' });
+  return b;
 }
 
 export class Fields {
-  constructor(readonly store: SettingsStore) {}
+  constructor(readonly ctx: AppContext) {}
 
-  tip(path: SettingsPath, desc: string): TipSpec {
-    return { desc, path };
+  get store(): SettingsStore {
+    return this.ctx.store;
   }
 
-  /** Bare number widget (optionally with an in-field label), not wrapped in a row. */
-  numWidget(path: NumPath, spec: NumSpec, label?: string): Widget {
-    return numberField({
-      bind: settingsBinding<number>(this.store, path),
-      min: spec.min,
-      max: spec.max,
-      step: spec.step,
-      precision: spec.precision,
-      unit: spec.unit,
-      scale: spec.scale,
-      integer: spec.integer,
-      slider: spec.slider,
-      label,
-      tip: this.tip(path, spec.desc),
-    });
+  schema(path: SettingsPath): FieldSchema {
+    return fieldSchema(path);
   }
 
-  /** Property-split row with a number field / slider. */
-  num(path: NumPath, label: string, spec: NumSpec): HTMLElement {
-    return propRow(label, this.numWidget(path, spec).el);
+  tip(path: SettingsPath): TipSpec {
+    const f = fieldSchema(path);
+    return { title: f.label, desc: f.desc, extra: f.model ? 'Re-runs the model when changed' : undefined, path };
   }
 
-  check(path: BoolPath, label: string, desc: string): HTMLElement {
-    return propRow(null, checkbox({ bind: settingsBinding<boolean>(this.store, path), label, tip: this.tip(path, desc) }).el);
+  /** The bare input widget for a path (number / checkbox / enum / colour). Points have their own row, see `row`. */
+  widget(path: SettingsPath): Widget {
+    const f = fieldSchema(path);
+    switch (f.kind) {
+      case 'number': {
+        const integer = f.step % 1 === 0 && f.min % 1 === 0;
+        return numberField({
+          bind: settingsBinding<number>(this.store, path),
+          min: f.min,
+          max: f.max,
+          step: f.step,
+          integer,
+          snap: true,
+          plain: true,
+          // mask / depth settings re-run the pipeline: commit on release, not while dragging
+          defer: path.startsWith('mask.') || path.startsWith('depth.'),
+          precision: decimals(f.step),
+          slider: f.slider,
+          tip: this.tip(path),
+        });
+      }
+      case 'bool':
+        return checkbox({ bind: settingsBinding<boolean>(this.store, path), label: f.label, tip: this.tip(path) });
+      case 'enum':
+        return enumField<string | number>({
+          bind: settingsBinding<string | number>(this.store, path),
+          options: f.options,
+          tip: this.tip(path),
+        });
+      case 'color':
+        return colorField({ bind: settingsBinding<string>(this.store, path), tip: this.tip(path) });
+      default:
+        throw new Error(`${path}: no generic widget (see the Pick object buttons)`);
+    }
   }
 
-  /** Checkbox without a row wrapper (for panel headers). */
-  checkWidget(path: BoolPath, label: string, desc: string): Widget {
-    return checkbox({ bind: settingsBinding<boolean>(this.store, path), label, tip: this.tip(path, desc) });
+  /** Property-split row: right-aligned label (with the model badge when relevant) and the widget. */
+  row(path: SettingsPath, label?: string): HTMLElement {
+    const f = fieldSchema(path);
+    const w = this.widget(path);
+    const text = f.kind === 'bool' ? '' : (label ?? f.label);
+    const lab = h('div', { class: 'pw-prop-label' }, f.model ? modelBadge() : null, text);
+    return h('div', { class: 'pw-prop' }, lab, h('div', { class: 'pw-prop-field' }, w.el));
   }
 
-  enum<T extends string | number>(
-    path: StrPath | NumPath,
-    label: string,
-    options: readonly EnumOption<T>[],
-    desc: string,
-  ): HTMLElement {
-    return propRow(label, enumField({ bind: settingsBinding<T>(this.store, path), options, tip: this.tip(path, desc) }).el);
-  }
-
-  seg<T extends string | number>(
-    path: StrPath | NumPath,
-    label: string | null,
-    options: readonly EnumOption<T>[],
-    desc: string,
-  ): HTMLElement {
-    return propRow(label, segmented({ bind: settingsBinding<T>(this.store, path), options, tip: this.tip(path, desc) }).el);
-  }
-
-  color(path: StrPath, label: string, desc: string): HTMLElement {
-    return propRow(label, colorField({ bind: settingsBinding<string>(this.store, path), tip: this.tip(path, desc) }).el);
-  }
-
-  boolBinding(path: BoolPath) {
-    return settingsBinding<boolean>(this.store, path);
+  rows(...paths: SettingsPath[]): HTMLElement[] {
+    return paths.map((p) => this.row(p));
   }
 }

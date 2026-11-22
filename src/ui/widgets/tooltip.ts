@@ -4,7 +4,7 @@ import { h } from '../dom';
 export interface TipSpec {
   title?: string;
   desc?: string;
-  /** Settings path, e.g. "geometry.foregroundRelief", rendered as paperwall3d.geometry.foreground_relief. */
+  /** Settings path, e.g. "mask.thresh", shown as the config.json key. */
   path?: string;
   /** Free-form extra line (e.g. shortcut). */
   extra?: string;
@@ -13,14 +13,6 @@ export interface TipSpec {
 const DELAY_MS = 600;
 let tipEl: HTMLDivElement | null = null;
 let timer: number | undefined;
-
-const snake = (s: string): string => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
-
-/** `geometry.foregroundRelief` -> `paperwall3d.geometry.foreground_relief` */
-export function pyPath(path: string): string {
-  const [section, key] = path.split('.');
-  return `paperwall3d.${section}${key ? '.' + snake(key) : ''}`;
-}
 
 function hide(): void {
   window.clearTimeout(timer);
@@ -35,7 +27,7 @@ function show(anchor: HTMLElement, spec: TipSpec): void {
   if (spec.title) el.appendChild(h('div', { class: 'pw-tooltip-title', text: spec.title }));
   if (spec.desc) el.appendChild(h('div', { class: 'pw-tooltip-desc', text: spec.desc }));
   if (spec.extra) el.appendChild(h('div', { class: 'pw-tooltip-extra', text: spec.extra }));
-  if (spec.path) el.appendChild(h('div', { class: 'pw-tooltip-path', text: `Python: ${pyPath(spec.path)}` }));
+  if (spec.path) el.appendChild(h('div', { class: 'pw-tooltip-path', text: `config.json: ${spec.path}` }));
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();
   const tw = el.offsetWidth;

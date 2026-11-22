@@ -9,11 +9,16 @@ import type {
   PreparedScene,
   RawAnalysis,
   SourceImage,
+  StageView,
+  ViewMode,
 } from '../core/types';
+import type { PresetId } from '../core/presets';
 import type { ProjectSummary } from '../persistence/projects';
 import type { OperatorRegistry } from './operators';
 import type { Reports } from './reports';
 import type { LayerId, UIState } from './state';
+
+export type { PresetId } from '../core/presets';
 
 export interface AppEvents extends Record<string, unknown> {
   /** A new source image was loaded (or cleared). */
@@ -43,10 +48,15 @@ export interface AppContext {
   /** True while the placeholder demo scene is shown. */
   readonly isDemo: boolean;
   readonly busy: boolean;
+  /** The element the renderer lives in (moved into the wallpaper preview frame while it is open). */
+  readonly viewportHost: HTMLElement | null;
   readonly backendInfo: BackendInfo | null;
   sceneName: string;
 
-  openImage(file: Blob, name?: string): Promise<void>;
+  /** `presetId`: apply that preset (src/core/presets.ts) before analysing. */
+  openImage(file: Blob, name?: string, presetId?: PresetId): Promise<void>;
+  /** Apply a preset to the current settings (one undo step). */
+  applyPreset(id: PresetId): void;
   reanalyze(): void;
   cancelJob(): void;
   newScene(): void;
@@ -60,11 +70,24 @@ export interface AppContext {
   recentProjects(): Promise<ProjectSummary[]>;
   deleteProject(id: string): Promise<void>;
 
+  /** Accepts a `.pw3d.json` (v1/v2) or a bare 2.5dwallpp `config.json`. */
   importConfig(file: File): Promise<void>;
+  /** `.pw3d.json` (v2), optionally with the source image and maps embedded. */
   exportConfig(embedAssets: boolean): Promise<void>;
+  /** Plain 2.5dwallpp-compatible `config.json` (shared sections, no comments). */
+  exportConfigJson(): Promise<void>;
   exportGLB(): Promise<void>;
+  /** Self-contained live HTML wallpaper (renderer.exportHTML). */
+  exportHTML(): Promise<void>;
   renderImage(width?: number, height?: number): Promise<void>;
 
   resetView(): void;
   setLayerVisible(layer: LayerId, visible: boolean): void;
+  /** Enter/leave Pick Object mode (status hint + renderer.setPicking). Picking is only possible in the 2D view. */
+  setPicking(on: boolean): void;
+  /** A click in the viewport while picking: map to image coordinates and set `mask.click`. Returns false if outside the image. */
+  pickAt(clientX: number, clientY: number): boolean;
+  clearPick(): void;
+  /** Switch view and/or stage (no undo checkpoint). */
+  showView(mode?: ViewMode, stage?: StageView): void;
 }

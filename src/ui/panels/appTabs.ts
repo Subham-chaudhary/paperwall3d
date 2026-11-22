@@ -1,16 +1,13 @@
-/** Properties tabs backed by application state rather than a single Settings section. */
-import type { Backend, ModelCacheEntry } from '../../core/types';
+/** Properties tabs backed by application state (image info, wallpaper/export, system). */
+import type { ModelCacheEntry } from '../../core/types';
 import { formatBytes, h } from '../dom';
 import type { AppContext } from '../context';
 import { userPrefs } from '../userprefs';
-import { settingsBinding } from '../widgets/binding';
-import { button, checkbox, enumField } from '../widgets/controls';
+import { button, checkbox } from '../widgets/controls';
 import { column, infoRow, propRow, spacedRow } from '../widgets/layout';
-import { numberField } from '../widgets/number';
 import type { Fields } from './fields';
 import { panel } from './panel';
-
-const page = (...panels: HTMLElement[]): HTMLElement => h('div', { class: 'pw-tab-page' }, ...panels);
+import { page } from './settingsTabs';
 
 /** Read-only row whose text is recomputed by `update()`. */
 function dynRow(label: string, text: () => string, updaters: (() => void)[]): HTMLElement {
@@ -32,101 +29,72 @@ export function imageTab(ctx: AppContext, f: Fields): HTMLElement {
   ctx.events.on('scene', refresh);
   ctx.events.on('name', refresh);
 
-  const reanalyze = button({
-    label: 'Re-analyze',
-    icon: 'refresh',
-    onClick: () => ctx.ops.run('image.reanalyze'),
-    tip: { desc: 'Run the segmentation and depth models again on the current image.', extra: 'Shift R' },
-  });
   const source = column(
     dynRow('Name', () => ctx.source?.name ?? (ctx.isDemo ? 'Demo scene' : '—'), upd),
     dynRow('Original', () => (ctx.source ? dims(ctx.source.originalWidth, ctx.source.originalHeight) : '—'), upd),
     dynRow('Working', () => (ctx.source ? dims(ctx.source.width, ctx.source.height) : '—'), upd),
-    dynRow('Foreground', () => (ctx.scene ? (ctx.scene.hasForeground ? 'Detected' : 'None (single layer)') : '—'), upd),
+    dynRow('Main Object', () => (ctx.scene ? (ctx.scene.hasForeground ? `${(ctx.scene.coverage * 100).toFixed(1)} % of the image` : 'None (single layer)') : '—'), upd),
     h('div', { class: 'pw-spacer' }),
     spacedRow(
       button({ label: 'Open Image…', icon: 'folder', variant: 'primary', onClick: () => ctx.ops.run('file.open_image'), tip: { desc: 'Open an image (JPG, PNG or WebP).', extra: 'Ctrl O' } }).el,
-      reanalyze.el,
+      button({ label: 'Re-analyze', icon: 'refresh', onClick: () => ctx.ops.run('image.reanalyze'), tip: { desc: 'Run the object-mask and depth models again on the current image.', extra: 'Shift R' } }).el,
     ),
   );
-  const timings = column(
+  const info = column(
     dynRow('AI backend', () => ctx.raw?.backendUsed.toUpperCase() ?? '—', upd),
-    dynRow('Segmentation', () => ctx.raw?.segmentationModel ?? (ctx.raw ? 'disabled' : '—'), upd),
-    dynRow('Depth', () => ctx.raw?.depthModel ?? '—', upd),
+    dynRow('Mask model', () => ctx.raw?.segmentationModel ?? (ctx.raw ? 'off' : '—'), upd),
+    dynRow('Depth model', () => ctx.raw?.depthModel ?? '—', upd),
     dynRow(
       'Analysis',
       () => {
         const t = ctx.raw?.timings;
         if (!t) return '—';
-        const total = Object.values(t).reduce((a, b) => a + b, 0);
-        return `${Math.round(total)} ms`;
+        return `${Math.round(Object.values(t).reduce((a, b) => a + b, 0))} ms`;
       },
       upd,
     ),
-    dynRow('Post-process', () => {
-      const t = ctx.scene?.timings;
-      if (!t) return '—';
-      return `${Math.round(Object.values(t).reduce((a, b) => a + b, 0))} ms`;
-    }, upd),
-  );
-  const resolution = propRow(
-    'Working Res.',
-    enumField<number>({
-      bind: settingsBinding<number>(ctx.store, 'runtime.workingResolution'),
-      options: [512, 768, 1024, 1536, 2048].map((v) => ({ value: v, label: `${v} px` })),
-      tip: f.tip('runtime.workingResolution', 'Long edge of the processed image. Higher = more detail but slower. Changing it re-runs analysis.'),
-    }).el,
+    dynRow(
+      'Post-process',
+      () => {
+        const t = ctx.scene?.timings;
+        if (!t) return '—';
+        return `${Math.round(Object.values(t).reduce((a, b) => a + b, 0))} ms`;
+      },
+      upd,
+    ),
   );
   return page(
     panel({ id: 'img.source', title: 'Source Image' }, source),
-    panel({ id: 'img.processing', title: 'Processing' }, resolution, timings),
+    panel({ id: 'img.processing', title: 'Processing' }, ...f.rows('runtime.workingResolution', 'runtime.backend'), info),
   );
 }
 
-export function outputTab(ctx: AppContext): HTMLElement {
-  const outW = numberField({
-    bind: userPrefs.binding('outputWidth'),
-    min: 0, max: 8192, integer: true, step: 64, label: 'W', unit: ' px',
-    tip: { desc: 'Width of the rendered still. 0 = automatic (source aspect, 1920 px long edge).' },
-  });
-  const outH = numberField({
-    bind: userPrefs.binding('outputHeight'),
-    min: 0, max: 8192, integer: true, step: 64, label: 'H', unit: ' px',
-    tip: { desc: 'Height of the rendered still. 0 = automatic.' },
-  });
+export function wallpaperTab(ctx: AppContext, f: Fields): HTMLElement {
+  const full = (label: string, ic: Parameters<typeof button>[0]['icon'], op: string, desc: string, extra?: string, primary = false): HTMLElement =>
+    propRow(null, button({ label, icon: ic, variant: primary ? 'primary' : 'default', onClick: () => ctx.ops.run(op), tip: { desc, extra } }).el);
   return page(
     panel(
-      { id: 'out.render', title: 'Render' },
-      propRow('Resolution', spacedRow(outW.el, outH.el)),
-      propRow(
-        null,
-        button({
-          label: 'Render Image',
-          icon: 'aperture',
-          variant: 'primary',
-          onClick: () => ctx.ops.run('render.image'),
-          tip: { desc: 'Render a PNG still of the current view.', extra: 'F12' },
-        }).el,
-      ),
+      { id: 'wp.preview', title: 'Wallpaper Preview' },
+      ...f.rows('wallpaper.aspect', 'wallpaper.overlay'),
+      full('Preview Wallpaper', 'fullscreen', 'view.preview_wallpaper', 'Full-window preview of the wallpaper in a desktop frame. Every export goes through it.', 'Ctrl Shift P'),
     ),
     panel(
-      { id: 'out.export', title: 'Export' },
-      propRow(null, button({ label: 'Export GLB', icon: 'cube', onClick: () => ctx.ops.run('file.export_glb'), tip: { desc: 'Export the layered meshes as a binary glTF.', extra: 'Ctrl E' } }).el),
-      propRow(null, button({ label: 'Export Wallpaper Config', icon: 'export', onClick: () => ctx.ops.run('file.export_config'), tip: { desc: 'Save the settings as a reusable .pw3d.json file.', extra: 'Ctrl Shift S' } }).el),
+      { id: 'wp.export', title: 'Export' },
+      full('Live Wallpaper (.html)', 'sparkle', 'file.export_html', 'Self-contained web wallpaper for Wallpaper Engine / Lively / any browser (opens the wallpaper preview first).'),
+      full('Export GLB', 'cube', 'file.export_glb', 'Export the layered meshes as a binary glTF (opens the wallpaper preview first).', 'Ctrl E'),
+      full('Render PNG', 'aperture', 'render.image', 'Render a PNG still at the wallpaper frame aspect (opens the wallpaper preview first).', 'F12'),
+      full('Export config.json', 'file', 'file.export_config_json', 'Save a plain 2.5dwallpp-compatible config.json.'),
+      full('Export .pw3d.json', 'export', 'file.export_config', 'Save a reusable PaperWall3D wallpaper config.', 'Ctrl Shift S'),
       propRow(
         null,
         checkbox({
           bind: userPrefs.binding('embedAssets'),
           label: 'Embed Assets',
-          tip: { desc: 'Embed the source image, mask and depth maps in the config as data URLs so it opens without running AI.' },
+          tip: { desc: 'Embed the source image, mask and depth maps in the .pw3d.json as data URLs so it opens without running AI.' },
         }).el,
       ),
     ),
-    panel(
-      { id: 'out.preview', title: 'Live Wallpaper' },
-      h('p', { class: 'pw-note', text: 'Fullscreen preview hides all interface elements. Keep this tab open full-screen to use the scene as a live wallpaper.' }),
-      propRow(null, button({ label: 'Fullscreen Preview', icon: 'fullscreen', onClick: () => ctx.ops.run('view.fullscreen_preview'), tip: { desc: 'Maximize the viewport and hide all UI.', extra: 'F11 / Ctrl Space' } }).el),
-    ),
+    panel({ id: 'wp.viewport', title: 'Viewport' }, ...f.rows('view.background', 'view.showStats')),
   );
 }
 
@@ -143,28 +111,6 @@ export function systemTab(ctx: AppContext, f: Fields): HTMLElement {
     dynRow('Isolated', () => yesNo(ctx.backendInfo?.crossOriginIsolated), upd),
     dynRow('CPU Cores', () => String(ctx.backendInfo?.hardwareConcurrency ?? navigator.hardwareConcurrency ?? '—'), upd),
     dynRow('Active', () => ctx.backendInfo?.active?.toUpperCase() ?? 'Idle', upd),
-  );
-  const runtime = column(
-    propRow(
-      'Backend',
-      enumField<Backend>({
-        bind: settingsBinding<Backend>(ctx.store, 'runtime.backend'),
-        options: [
-          { value: 'auto', label: 'Auto (WebGPU, fallback WASM)' },
-          { value: 'webgpu', label: 'WebGPU' },
-          { value: 'wasm', label: 'WebAssembly (CPU)' },
-        ],
-        tip: f.tip('runtime.backend', 'Inference backend for the AI models. Changing it re-runs analysis.'),
-      }).el,
-    ),
-    propRow(
-      'Working Res.',
-      enumField<number>({
-        bind: settingsBinding<number>(ctx.store, 'runtime.workingResolution'),
-        options: [512, 768, 1024, 1536, 2048].map((v) => ({ value: v, label: `${v} px` })),
-        tip: f.tip('runtime.workingResolution', 'Long edge of the processed image.'),
-      }).el,
-    ),
   );
 
   const list = h('div', { class: 'pw-model-list' });
@@ -205,10 +151,7 @@ export function systemTab(ctx: AppContext, f: Fields): HTMLElement {
   });
   const modelsPanel = column(
     list,
-    spacedRow(
-      clearBtn.el,
-      button({ iconOnly: true, icon: 'refresh', onClick: () => void refreshModels(), tip: { desc: 'Refresh model list' } }).el,
-    ),
+    spacedRow(clearBtn.el, button({ iconOnly: true, icon: 'refresh', onClick: () => void refreshModels(), tip: { desc: 'Refresh model list' } }).el),
   );
   ctx.ui.on('tab', (t) => {
     if (t === 'system') void refreshModels();
@@ -240,7 +183,7 @@ export function systemTab(ctx: AppContext, f: Fields): HTMLElement {
 
   return page(
     panel({ id: 'sys.backend', title: 'Backend' }, backendPanel),
-    panel({ id: 'sys.runtime', title: 'Runtime' }, runtime),
+    panel({ id: 'sys.depthmodel', title: 'Depth Model' }, ...f.rows('depth.model')),
     panel({ id: 'sys.models', title: 'Models' }, modelsPanel),
     panel({ id: 'sys.memory', title: 'Memory', defaultOpen: false }, memory),
     panel(

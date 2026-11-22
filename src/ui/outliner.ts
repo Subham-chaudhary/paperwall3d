@@ -2,25 +2,28 @@
 import type { AppContext } from './context';
 import { h } from './dom';
 import { icon, type IconName } from './icons';
-import type { LayerId, OutlinerId, PropTab } from './state';
+import type { StageView } from '../core/types';
+import type { LayerId, OutlinerId, ScenePanel } from './state';
 import { iconToggle } from './widgets/controls';
 
 interface Item {
   id: LayerId;
   label: string;
   icon: IconName;
-  tab: PropTab;
+  panel: ScenePanel;
   suffix?: string;
+  /** Show an eye toggle. */
+  eye: boolean;
+  /** Clicking also switches the 2D stage. */
+  stage?: StageView;
 }
 
 const ITEMS: Item[] = [
-  { id: 'camera', label: 'Camera', icon: 'camera', tab: 'camera' },
-  { id: 'keyLight', label: 'Key Light', icon: 'sun', tab: 'lighting' },
-  { id: 'rimLight', label: 'Rim Light', icon: 'bulb', tab: 'lighting' },
-  { id: 'background', label: 'Background', icon: 'mesh', tab: 'geometry', suffix: 'mesh' },
-  { id: 'foreground', label: 'Foreground', icon: 'mesh', tab: 'geometry', suffix: 'mesh' },
-  { id: 'depth', label: 'Depth Map', icon: 'depth', tab: 'depth' },
-  { id: 'mask', label: 'Mask', icon: 'mask', tab: 'segmentation' },
+  { id: 'background', label: 'Background Plane', icon: 'mesh', panel: 'layers', suffix: 'inpainted', eye: true },
+  { id: 'foreground', label: 'Object', icon: 'mesh', panel: 'mask', suffix: 'cut-out', eye: true },
+  { id: 'camera', label: 'Camera', icon: 'camera', panel: 'camera3d', eye: false },
+  { id: 'depth', label: 'Depth Map', icon: 'depth', panel: 'depth', eye: true, stage: 'depth' },
+  { id: 'mask', label: 'Object Mask', icon: 'mask', panel: 'mask', eye: true, stage: 'mask' },
 ];
 
 export function createOutliner(ctx: AppContext): HTMLElement {
@@ -37,14 +40,10 @@ export function createOutliner(ctx: AppContext): HTMLElement {
   const visible = (id: LayerId): boolean => {
     const s = ctx.store;
     switch (id) {
-      case 'keyLight':
-        return s.getValue('lighting.keyIntensity') > 0;
-      case 'rimLight':
-        return s.getValue('lighting.rimIntensity') > 0;
       case 'depth':
-        return s.getValue('view.mode') === 'depth';
+        return s.getValue('view.mode') === '2d' && s.getValue('view.stage') === 'depth';
       case 'mask':
-        return s.getValue('view.mode') === 'mask';
+        return s.getValue('view.mode') === '2d' && s.getValue('view.stage') === 'mask';
       default:
         return ctx.ui.layers[id];
     }
@@ -97,12 +96,13 @@ export function createOutliner(ctx: AppContext): HTMLElement {
       h('span', { class: 'pw-tree-icon' }, icon(it.icon, 14)),
       h('span', { class: 'pw-tree-label', text: it.label }),
       it.suffix ? h('span', { class: 'pw-tree-suffix', text: `(${it.suffix})` }) : null,
-      eye.el,
+      it.eye ? eye.el : null,
     );
     row.dataset.label = it.label.toLowerCase();
     row.addEventListener('click', () => {
       ctx.ui.select(it.id);
-      ctx.ui.setTab(it.tab);
+      if (it.stage) ctx.showView('2d', it.stage);
+      ctx.ui.reveal(it.panel);
     });
     rows.set(it.id, row);
     tree.appendChild(row);

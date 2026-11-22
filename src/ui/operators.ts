@@ -7,12 +7,13 @@ import { isTyping, pickFile } from './dom';
 import type { AppContext } from './context';
 import type { IconName } from './icons';
 import { errorMessage } from './reports';
-import { WORKSPACES, type Tool } from './state';
+import { WORKSPACES } from './state';
 import { userPrefs } from './userprefs';
-import { CAMERA_MODES, VIEW_MODES } from './viewmodes';
+import { STAGES, VIEW_MODES } from './viewmodes';
 import { openAbout, openPreferences } from './dialogs';
 import { openOperatorSearch } from './opsearch';
 import { openPieMenu } from './pie';
+import { closeWallpaperPreview, openWallpaperPreview, saveWallpaperPng, type ExportIntent } from './preview';
 import { openSplash } from './splash';
 
 export interface Operator {
@@ -101,12 +102,13 @@ export class OperatorRegistry {
     }
   }
 
-  /** Keyboard dispatch. Returns true when a shortcut was consumed. */
-  handleKey(e: KeyboardEvent): boolean {
+  /** Keyboard dispatch. `allow` restricts which operators may fire (wallpaper preview). Returns true when a shortcut was consumed. */
+  handleKey(e: KeyboardEvent, allow?: (id: string) => boolean): boolean {
     if (e.isComposing || e.repeat || isTyping(e.target)) return false;
     for (const op of this.ops.values()) {
       const specs = this.parsed.get(op.id);
       if (!specs?.some((s) => matches(e, s))) continue;
+      if (allow && !allow(op.id)) continue;
       if (!this.enabled(op.id)) continue;
       e.preventDefault();
       this.run(op.id);
@@ -118,10 +120,33 @@ export class OperatorRegistry {
 
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
 
+/** Operators that stay available while the wallpaper preview is open. */
+export const PREVIEW_ALLOWED = new Set([
+  'view.preview_wallpaper',
+  'view.fullscreen_preview',
+  'file.export_html',
+  'file.export_glb',
+  'render.image',
+  'file.export_config',
+  'file.export_config_json',
+  'file.export_config_embedded',
+]);
+
 /** Register the built-in operator set. */
 export function registerOperators(reg: OperatorRegistry): void {
   const hasImage = (c: AppContext): boolean => c.source !== null;
   const hasRenderer = (c: AppContext): boolean => c.renderer !== null;
+
+  /** Exports go through the Wallpaper Preview first; inside the preview they run directly. */
+  const routed =
+    (intent: ExportIntent, direct: (c: AppContext) => void | Promise<void>) =>
+    (c: AppContext): void | Promise<void> => {
+      if (!c.ui.previewOpen) {
+        openWallpaperPreview(c, { intent });
+        return;
+      }
+      return direct(c);
+    };
 
   // ── File ──
   reg.register({
@@ -141,30 +166,39 @@ export function registerOperators(reg: OperatorRegistry): void {
     run: (c) => c.saveProject(),
   });
   reg.register({
-    id: 'file.import_config', label: 'Import Wallpaper Config…', category: 'File', icon: 'import', shortcut: 'Ctrl+Shift+O',
+    id: 'file.import_config', label: 'Import Config (.pw3d.json / config.json)…', category: 'File', icon: 'import', shortcut: 'Ctrl+Shift+O',
     run: async (c) => {
       const file = await pickFile('.json,application/json,.pw3d.json');
       if (file) await c.importConfig(file);
     },
   });
   reg.register({
-    id: 'file.export_config', label: 'Export Wallpaper Config…', category: 'File', icon: 'export', shortcut: 'Ctrl+Shift+S',
-    run: (c) => c.exportConfig(userPrefs.get('embedAssets')),
+    id: 'file.export_config', label: 'Export .pw3d.json…', category: 'Export', icon: 'export', shortcut: 'Ctrl+Shift+S',
+    run: routed('pw3d', (c) => c.exportConfig(userPrefs.get('embedAssets'))),
   });
   reg.register({
-    id: 'file.export_config_embedded', label: 'Export Wallpaper Config (Embed Assets)…', category: 'File', icon: 'export',
+    id: 'file.export_config_embedded', label: 'Export .pw3d.json (Embed Assets)…', category: 'Export', icon: 'export',
     poll: hasImage,
-    run: (c) => c.exportConfig(true),
+    run: routed('pw3d', (c) => c.exportConfig(true)),
   });
   reg.register({
-    id: 'file.export_glb', label: 'Export GLB…', category: 'File', icon: 'cube', shortcut: 'Ctrl+E',
-    poll: hasRenderer,
-    run: (c) => c.exportGLB(),
+    id: 'file.export_config_json', label: 'Export config.json (2.5dwallpp)…', category: 'Export', icon: 'file',
+    run: routed('config', (c) => c.exportConfigJson()),
   });
   reg.register({
-    id: 'render.image', label: 'Render Image', category: 'Render', icon: 'aperture', shortcut: 'F12',
+    id: 'file.export_html', label: 'Export Live Wallpaper (.html)…', category: 'Export', icon: 'sparkle',
     poll: hasRenderer,
-    run: (c) => c.renderImage(userPrefs.get('outputWidth') || undefined, userPrefs.get('outputHeight') || undefined),
+    run: routed('html', (c) => c.exportHTML()),
+  });
+  reg.register({
+    id: 'file.export_glb', label: 'Export GLB…', category: 'Export', icon: 'cube', shortcut: 'Ctrl+E',
+    poll: hasRenderer,
+    run: routed('glb', (c) => c.exportGLB()),
+  });
+  reg.register({
+    id: 'render.image', label: 'Render PNG…', category: 'Export', icon: 'aperture', shortcut: 'F12',
+    poll: hasRenderer,
+    run: routed('png', (c) => saveWallpaperPng(c)),
   });
 
   // ── Edit ──
@@ -192,6 +226,16 @@ export function registerOperators(reg: OperatorRegistry): void {
     poll: (c) => c.busy,
     run: (c) => c.cancelJob(),
   });
+  reg.register({
+    id: 'view.pick_object', label: 'Pick Object…', category: 'Mask', icon: 'eyedropper', shortcut: 'P',
+    poll: (c) => c.source !== null && c.renderer !== null,
+    run: (c) => c.setPicking(!c.ui.picking),
+  });
+  reg.register({
+    id: 'view.clear_pick', label: 'Clear Picked Object', category: 'Mask', icon: 'close',
+    poll: (c) => c.store.getValue('mask.click') !== null,
+    run: (c) => c.clearPick(),
+  });
 
   // ── View ──
   reg.register({
@@ -200,17 +244,12 @@ export function registerOperators(reg: OperatorRegistry): void {
     run: (c) => c.resetView(),
   });
   reg.register({
-    id: 'view.fullscreen_preview', label: 'Toggle Fullscreen Preview', category: 'View', icon: 'fullscreen', shortcut: 'F11', altShortcuts: ['Ctrl+Space'],
-    run: (c) => {
-      const on = !c.ui.fullscreen;
-      c.ui.setFullscreen(on);
-      if (on) {
-        c.reports.info('Fullscreen preview: press Esc, F11 or Ctrl+Space to return');
-        void document.documentElement.requestFullscreen?.().catch(() => undefined);
-      } else if (document.fullscreenElement) {
-        void document.exitFullscreen().catch(() => undefined);
-      }
-    },
+    id: 'view.preview_wallpaper', label: 'Preview Wallpaper', category: 'View', icon: 'fullscreen', shortcut: 'Ctrl+Shift+P', altShortcuts: ['F'],
+    run: (c) => (c.ui.previewOpen ? closeWallpaperPreview() : openWallpaperPreview(c)),
+  });
+  reg.register({
+    id: 'view.fullscreen_preview', label: 'Wallpaper Preview in Browser Fullscreen', category: 'View', icon: 'fullscreen', shortcut: 'F11', altShortcuts: ['Ctrl+Space'],
+    run: (c) => (c.ui.previewOpen ? closeWallpaperPreview() : openWallpaperPreview(c, { browserFullscreen: true })),
   });
   reg.register({
     id: 'view.toggle_sidebar', label: 'Toggle Sidebar', category: 'View', icon: 'sidebar', shortcut: 'N',
@@ -228,13 +267,6 @@ export function registerOperators(reg: OperatorRegistry): void {
     },
   });
   reg.register({
-    id: 'view.toggle_grid', label: 'Toggle Grid', category: 'View', icon: 'grid',
-    run: (c) => {
-      c.store.checkpoint();
-      c.store.set('view.showGrid', !c.store.getValue('view.showGrid'));
-    },
-  });
-  reg.register({
     id: 'view.toggle_drawer', label: 'Toggle Right Panel Drawer', category: 'View', icon: 'sidebar',
     run: (c) => c.ui.setDrawer(!c.ui.drawerOpen),
   });
@@ -244,41 +276,41 @@ export function registerOperators(reg: OperatorRegistry): void {
   });
   for (const m of VIEW_MODES) {
     reg.register({
-      id: `view.mode_${m.value}`, label: `View Mode: ${m.label}`, category: 'View', icon: m.icon,
-      run: (c) => c.store.set('view.mode', m.value),
+      id: `view.mode_${m.value}`, label: `View: ${m.label}`, category: 'View', icon: m.icon,
+      run: (c) => c.showView(m.value),
     });
   }
-  for (const m of CAMERA_MODES) {
+  for (const m of STAGES) {
     reg.register({
-      id: `camera.mode_${m.value}`, label: `Camera Mode: ${m.label}`, category: 'View', icon: m.icon,
-      run: (c) => {
-        c.store.checkpoint();
-        c.store.set('camera.mode', m.value);
-      },
+      id: `view.stage_${m.value}`, label: `Show Stage: ${m.label}`, category: 'View', icon: m.icon,
+      run: (c) => c.showView('2d', m.value),
     });
   }
+  reg.register({
+    id: 'camera.toggle_rotate', label: '3D Camera: Toggle Auto-Rotate', category: 'View', icon: 'refresh',
+    run: (c) => {
+      c.store.checkpoint();
+      c.store.set('camera3d.rotate', !c.store.getValue('camera3d.rotate'));
+    },
+  });
 
-  // ── Window / workspaces / tools ──
+  // ── Window / workspaces ──
   WORKSPACES.forEach((w, i) => {
     reg.register({
       id: `window.workspace_${w.id}`, label: `Workspace: ${w.label}`, category: 'Window', icon: 'view3d',
       shortcut: `Alt+${i + 1}`, // Ctrl+digit is reserved by browsers for tab switching
       run: (c) => {
+        if (w.id === 'export') {
+          openWallpaperPreview(c);
+          return;
+        }
         c.ui.setWorkspace(w.id);
-        c.ui.setTab(w.tab);
-        c.store.set('view.mode', w.mode);
+        if (w.mode) c.showView(w.mode, w.stage);
+        c.ui.setTab('scene');
+        if (w.panel) c.ui.reveal(w.panel);
       },
     });
   });
-  const tools: [Tool, string, IconName][] = [
-    ['select', 'Select / Pan View', 'cursor'],
-    ['orbit', 'Orbit', 'orbit'],
-    ['light', 'Light Direction', 'lightDir'],
-    ['measure', 'Measure Depth', 'eyedropper'],
-  ];
-  for (const [t, label, ic] of tools) {
-    reg.register({ id: `tool.${t}`, label: `Tool: ${label}`, category: 'Tool', icon: ic, run: (c) => c.ui.setTool(t) });
-  }
   reg.register({ id: 'window.about', label: 'About PaperWall3D', category: 'Help', icon: 'info', run: (c) => openAbout(c) });
   reg.register({ id: 'window.preferences', label: 'Preferences…', category: 'Edit', icon: 'gear', shortcut: 'Ctrl+,', run: (c) => openPreferences(c) });
   reg.register({ id: 'window.splash', label: 'Splash Screen', category: 'Help', icon: 'logo', run: (c) => openSplash(c) });

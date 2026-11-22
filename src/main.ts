@@ -6,6 +6,7 @@ import './ui/styles/panels.css';
 import './ui/styles/viewport.css';
 import './ui/styles/statusbar.css';
 import './ui/styles/splash.css';
+import './ui/styles/editor.css';
 
 import { App } from './app';
 

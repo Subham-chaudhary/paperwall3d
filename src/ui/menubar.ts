@@ -4,7 +4,7 @@ import { h } from './dom';
 import { icon } from './icons';
 import { formatShortcut } from './operators';
 import { WORKSPACES } from './state';
-import { CAMERA_MODES, VIEW_MODES } from './viewmodes';
+import { STAGES, VIEW_MODES } from './viewmodes';
 import { customBinding } from './widgets/binding';
 import { textField } from './widgets/controls';
 import { closeMenus, isMenuOpenFor, openMenu, type MenuItem } from './widgets/menu';
@@ -53,10 +53,14 @@ export function createTopBar(ctx: AppContext): HTMLElement {
         op('file.save_project'),
         sep,
         op('file.import_config'),
+        sep,
+        op('view.preview_wallpaper', 'Preview Wallpaper & Export…'),
+        op('file.export_html'),
+        op('file.export_glb'),
+        op('render.image'),
+        op('file.export_config_json'),
         op('file.export_config'),
         op('file.export_config_embedded'),
-        sep,
-        op('file.export_glb'),
       ],
     ],
     [
@@ -78,40 +82,52 @@ export function createTopBar(ctx: AppContext): HTMLElement {
         op('view.toggle_sidebar', 'Sidebar', { checked: ctx.ui.sidebarOpen, icon: undefined }),
         op('view.toggle_strip', 'Image Editor Strip', { checked: ctx.ui.stripOpen, icon: undefined }),
         op('view.toggle_stats', 'Statistics', { checked: ctx.store.getValue('view.showStats'), icon: undefined }),
-        op('view.toggle_grid', 'Grid', { checked: ctx.store.getValue('view.showGrid'), icon: undefined }),
         sep,
         {
-          label: 'Viewport Shading',
-          icon: 'aperture',
+          label: 'View',
+          icon: 'view3d',
           submenu: () =>
             VIEW_MODES.map<MenuItem>((m) => ({
               label: m.label,
               icon: m.icon,
               checked: ctx.store.getValue('view.mode') === m.value,
-              run: () => ctx.store.set('view.mode', m.value),
+              run: () => ctx.showView(m.value),
             })),
         },
         {
-          label: 'Camera Mode',
-          icon: 'camera',
+          label: 'Show Stage',
+          icon: 'layers',
           submenu: () =>
-            CAMERA_MODES.map<MenuItem>((m) => ({
+            STAGES.map<MenuItem>((m) => ({
               label: m.label,
               icon: m.icon,
-              checked: ctx.store.getValue('camera.mode') === m.value,
-              run: () => {
-                ctx.store.checkpoint();
-                ctx.store.set('camera.mode', m.value);
-              },
+              checked: ctx.store.getValue('view.stage') === m.value,
+              run: () => ctx.showView('2d', m.value),
             })),
         },
+        op('view.pick_object'),
         op('view.pie'),
         sep,
         op('view.reset'),
-        op('view.fullscreen_preview'),
+        op('view.preview_wallpaper'),
       ],
     ],
-    ['Render', () => [op('render.image'), op('image.reanalyze'), sep, op('file.export_glb'), sep, op('job.cancel')]],
+    [
+      'Export',
+      () => [
+        op('view.preview_wallpaper', 'Preview Wallpaper…'),
+        sep,
+        op('file.export_html'),
+        op('file.export_glb'),
+        op('render.image'),
+        op('file.export_config_json'),
+        op('file.export_config'),
+        op('file.export_config_embedded'),
+        sep,
+        op('image.reanalyze'),
+        op('job.cancel'),
+      ],
+    ],
     [
       'Window',
       () => [

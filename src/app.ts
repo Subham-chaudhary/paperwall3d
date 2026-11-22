@@ -4,8 +4,8 @@
  * Flow
  *   openImage -> pipeline.loadImage -> pipeline.analyze (AI, expensive) -> pipeline.reconstruct -> renderer.setScene
  *   settings change -> invalidation():
- *       'analyze'     re-run analyze (+ reconstruct), cancelling any in-flight job
- *       'reconstruct' debounced (~100 ms), latest-wins, never overlapping reconstruct -> renderer.setScene
+ *       'analyze'     debounced (300 ms), then re-run analyze (+ reconstruct), cancelling any in-flight job
+ *       'reconstruct' debounced (300 ms), latest-wins, never overlapping reconstruct -> renderer.setScene
  *       'render'      renderer.updateSettings only
  *   renderer.updateSettings is called on every change regardless.
  *
@@ -14,6 +14,8 @@
  */
 import { Emitter } from './core/events';
 import { cloneSettings, DEFAULT_SETTINGS, mergeSettings } from './core/defaults';
+import { PRESETS } from './core/presets';
+import { sanitizeSettings } from './core/schema';
 import { invalidation, SettingsStore } from './core/store';
 import type {
   BackendInfo,
@@ -26,10 +28,13 @@ import type {
   Settings,
   SettingsPath,
   SourceImage,
+  StageView,
+  ViewMode,
 } from './core/types';
 import { createPipeline } from './ai';
 import { createDemoScene, createRenderer } from './render';
 import { buildConfig, dataUrlToBlob, parseConfig, pngDataUrlToMap } from './persistence/config';
+import { loadSettings, strictConfigJson } from './persistence/configJson';
 import { getPref, setPref } from './persistence/prefs';
 import {
   deleteProject,
@@ -42,18 +47,31 @@ import {
   updateProjectSettings,
   type ProjectSummary,
 } from './persistence/projects';
-import type { AppContext, AppEvents } from './ui/context';
+import type { AppContext, AppEvents, PresetId } from './ui/context';
 import { downloadBlob, stripExtension } from './ui/dom';
 import { OperatorRegistry, registerOperators } from './ui/operators';
+import { closeWallpaperPreview } from './ui/preview';
 import { errorMessage, Reports } from './ui/reports';
 import { createShell, type Shell } from './ui/shell';
 import { openSplash } from './ui/splash';
 import { UIState, type LayerId } from './ui/state';
 import { userPrefs } from './ui/userprefs';
 
-const RECONSTRUCT_DEBOUNCE_MS = 100;
+/** Mask/depth edits wait this long after the last change before the pipeline runs (latest request wins). */
+const REBUILD_DEBOUNCE_MS = 300;
 const AUTOSAVE_DEBOUNCE_MS = 500;
 const IMAGE_NAME_RE = /\.(jpe?g|png|webp)$/i;
+
+const UPLOAD_MSG = 'Running object mask → object depth… (first run loads the models)';
+const REBUILD_MSG = 'Rebuilding… (changed models re-run, the rest is quick)';
+
+/** A fresh editor session always starts in the 2D parallax view at the live Result. */
+function withEditorView(s: Settings): Settings {
+  const out = cloneSettings(s);
+  out.view.mode = '2d';
+  out.view.stage = 'result';
+  return out;
+}
 
 export class App implements AppContext {
   readonly store: SettingsStore;
@@ -80,15 +98,17 @@ export class App implements AppContext {
   private gen = 0;
   private analyzing = false;
   private suppress = false;
+  /** Status-bar message shown for the running job while the pipeline reports its stages (downloads keep their own text). */
+  private jobMessage: string | null = null;
 
   private reconTimer: number | undefined;
+  private analysisTimer: number | undefined;
   private reconRunning = false;
   private reconAgain = false;
   private autosaveTimer: number | undefined;
-  private readonly lastIntensity = new Map<string, number>();
 
   constructor() {
-    this.store = new SettingsStore(mergeSettings(getPref<unknown>('settings', null)));
+    this.store = new SettingsStore(withEditorView(loadSettings(getPref<unknown>('settings', null)).settings));
     this.ops.bind(this);
     registerOperators(this.ops);
   }
@@ -106,6 +126,10 @@ export class App implements AppContext {
     this._sceneName = v;
     this.events.emit('name', v);
     this.scheduleAutosave();
+  }
+
+  get viewportHost(): HTMLElement | null {
+    return this.shell?.viewport.host ?? null;
   }
 
   // ───────────────────────────────────────────── startup ─────────────────────────────────────────────
@@ -172,14 +196,28 @@ export class App implements AppContext {
   }
 
   private onProgress(p: PipelineProgress): void {
-    if (p.stage === 'error') this.reports.error(p.message || 'Pipeline error');
+    if (p.stage === 'error') {
+      this.reports.error(p.message || 'Pipeline error');
+      this.events.emit('progress', p);
+      return;
+    }
+    // Model downloads keep the pipeline's own text; the other stages show the job's headline.
+    if (this.jobMessage && !p.stage.startsWith('download')) {
+      this.events.emit('progress', { ...p, message: this.jobMessage });
+      return;
+    }
     this.events.emit('progress', p);
   }
 
-  private setBusy(b: boolean): void {
+  private setBusy(b: boolean, message = 'Working…'): void {
     this._busy = b;
-    if (!b) this.events.emit('progress', null);
-    else this.events.emit('progress', { stage: 'decode', progress: -1, message: 'Working…' });
+    if (!b) {
+      this.jobMessage = null;
+      this.events.emit('progress', null);
+    } else {
+      this.jobMessage = message;
+      this.events.emit('progress', { stage: 'decode', progress: -1, message });
+    }
   }
 
   // ───────────────────────────────────────────── settings flow ─────────────────────────────────────────────
@@ -191,13 +229,15 @@ export class App implements AppContext {
       this.reports.error(`Renderer update failed: ${errorMessage(e)}`, e);
     }
     this.scheduleAutosave();
+    // Leaving the 2D view (a view tab was clicked) cancels Pick Object.
+    if (this.ui.picking && changed.includes('view.mode') && settings.view.mode !== '2d') this.setPicking(false);
     if (this.suppress) return;
 
     const inv = invalidation(changed);
     if (inv === 'analyze') {
       if (!this.source) return;
       if (changed.includes('runtime.workingResolution')) void this.reloadAndAnalyze();
-      else this.startAnalysis();
+      else this.scheduleAnalysis();
     } else if (inv === 'reconstruct') {
       this.scheduleReconstruct();
     }
@@ -215,10 +255,19 @@ export class App implements AppContext {
     }
   }
 
+  private scheduleAnalysis(): void {
+    if (!this.source) return;
+    window.clearTimeout(this.reconTimer);
+    window.clearTimeout(this.analysisTimer);
+    if (!this._busy) this.events.emit('progress', { stage: 'decode', progress: -1, message: REBUILD_MSG });
+    this.analysisTimer = window.setTimeout(() => this.startAnalysis(), REBUILD_DEBOUNCE_MS);
+  }
+
   private scheduleReconstruct(): void {
     if (!this.source || !this.raw || this.analyzing) return;
     window.clearTimeout(this.reconTimer);
-    this.reconTimer = window.setTimeout(() => void this.pumpReconstruct(), RECONSTRUCT_DEBOUNCE_MS);
+    if (!this._busy) this.events.emit('progress', { stage: 'decode', progress: -1, message: REBUILD_MSG });
+    this.reconTimer = window.setTimeout(() => void this.pumpReconstruct(), REBUILD_DEBOUNCE_MS);
   }
 
   /** Latest-wins reconstruct loop: never runs two reconstructs concurrently. */
@@ -239,11 +288,13 @@ export class App implements AppContext {
         const scene = await pipeline.reconstruct(source, raw, cloneSettings(this.store.get()));
         if (gen !== this.gen || source !== this.source || this.reconAgain) continue;
         this.applyScene(scene);
+        this.reports.success(this.doneMessage(null, scene));
       } while (this.reconAgain);
     } catch (e) {
       this.reports.error(`Reconstruction failed: ${errorMessage(e)}`, e);
     } finally {
       this.reconRunning = false;
+      if (!this._busy) this.events.emit('progress', null);
     }
   }
 
@@ -258,15 +309,32 @@ export class App implements AppContext {
     this.events.emit('scene', scene);
   }
 
+  /** "Done · mask model N ms · depth model N ms · layers N ms · object covers N%" (model parts only when they ran). */
+  private doneMessage(raw: RawAnalysis | null, scene: PreparedScene): string {
+    const parts = ['Done'];
+    const ms = (v: number | undefined): string | null => (typeof v === 'number' && Number.isFinite(v) ? `${Math.round(v)} ms` : null);
+    if (raw) {
+      const mask = ms(raw.timings.segmentation);
+      if (mask) parts.push(`mask model ${mask}`);
+      const depth = ms(raw.timings.depth ?? raw.timings['depth-heuristic']);
+      if (depth) parts.push(`depth model ${depth}`);
+    }
+    const layers = ms(scene.timings.total);
+    if (layers) parts.push(`layers ${layers}`);
+    parts.push(`object covers ${Math.round(scene.coverage * 100)}%`);
+    return parts.join(' · ');
+  }
+
   // ───────────────────────────────────────────── jobs ─────────────────────────────────────────────
 
   /** Run a cancellable job; later jobs and cancelJob() invalidate it. */
-  private async job(label: string, fn: (gen: number) => Promise<void>): Promise<void> {
+  private async job(label: string, message: string, fn: (gen: number) => Promise<void>): Promise<void> {
     const gen = ++this.gen;
     this.pipeline?.cancel();
     window.clearTimeout(this.reconTimer);
+    window.clearTimeout(this.analysisTimer);
     this.analyzing = true;
-    this.setBusy(true);
+    this.setBusy(true, message);
     try {
       await fn(gen);
     } catch (e) {
@@ -283,7 +351,6 @@ export class App implements AppContext {
     const pipeline = this.getPipeline();
     const source = this.source;
     if (!pipeline || !source) throw new Error(this.pipelineError ?? 'No image loaded');
-    const t0 = performance.now();
     const raw = preset ?? (await pipeline.analyze(source, cloneSettings(this.store.get())));
     if (gen !== this.gen) return;
     this.raw = raw;
@@ -294,10 +361,7 @@ export class App implements AppContext {
     const scene = await pipeline.reconstruct(source, raw, cloneSettings(this.store.get()));
     if (gen !== this.gen) return;
     this.applyScene(scene);
-    const secs = ((performance.now() - t0) / 1000).toFixed(1);
-    this.reports.success(
-      preset ? `Loaded "${source.name}"` : `Analysis complete in ${secs}s (${raw.backendUsed.toUpperCase()})`,
-    );
+    this.reports.success(preset ? `Loaded "${source.name}"` : this.doneMessage(raw, scene));
     if (this.projectId && !preset) {
       void putAnalysis(this.projectId, this.store.get() as Settings, raw).catch((e: unknown) =>
         console.warn('Failed to cache analysis', e),
@@ -306,12 +370,12 @@ export class App implements AppContext {
   }
 
   private startAnalysis(): void {
-    void this.job('Analysis failed', (gen) => this.runAnalysis(gen));
+    void this.job('Analysis failed', REBUILD_MSG, (gen) => this.runAnalysis(gen));
   }
 
   /** Re-decode the original file at the current working resolution, then analyze. */
   private async reloadAndAnalyze(): Promise<void> {
-    await this.job('Analysis failed', async (gen) => {
+    await this.job('Analysis failed', REBUILD_MSG, async (gen) => {
       const pipeline = this.getPipeline();
       const old = this.source;
       if (!pipeline || !old) return;
@@ -324,9 +388,31 @@ export class App implements AppContext {
     });
   }
 
+  /** Drop a picked object (its coordinates mean nothing on another image) without triggering the pipeline. */
+  private async forgetPick(): Promise<void> {
+    if (this.store.getValue('mask.click') === null) return;
+    const next = cloneSettings(this.store.get());
+    next.mask.click = null;
+    await this.applySettingsSilently(next);
+  }
+
   // ───────────────────────────────────────────── AppContext: commands ─────────────────────────────────────────────
 
-  async openImage(file: Blob, name?: string): Promise<void> {
+  /** Settings with a preset's patch applied (merge + clamp). */
+  private presetSettings(id: PresetId): { settings: Settings; label: string } | null {
+    const preset = PRESETS.find((p) => p.id === id);
+    if (!preset) return null;
+    return { settings: sanitizeSettings(mergeSettings(preset.patch, this.store.get() as Settings)).settings, label: preset.label };
+  }
+
+  applyPreset(id: PresetId): void {
+    const r = this.presetSettings(id);
+    if (!r) return;
+    this.store.replace(r.settings); // one undo checkpoint; the store's invalidation re-runs what changed
+    this.reports.success(`Applied preset: ${r.label} (starting point)`);
+  }
+
+  async openImage(file: Blob, name?: string, presetId?: PresetId): Promise<void> {
     const fileName = name ?? (file instanceof File ? file.name : 'image');
     if (!file.type.startsWith('image/') && !IMAGE_NAME_RE.test(fileName)) {
       this.reports.error(`Unsupported file: ${fileName}. Open a JPG, PNG or WebP image.`);
@@ -334,7 +420,15 @@ export class App implements AppContext {
     }
     const pipeline = this.getPipeline();
     if (!pipeline) return;
-    await this.job('Could not open image', async (gen) => {
+    this.setPicking(false);
+    closeWallpaperPreview();
+    await this.job('Could not open image', UPLOAD_MSG, async (gen) => {
+      await this.forgetPick();
+      const preset = presetId ? this.presetSettings(presetId) : null;
+      if (preset) {
+        await this.applySettingsSilently(preset.settings);
+        this.reports.success(`Applied preset: ${preset.label} (starting point)`);
+      }
       const src = await pipeline.loadImage(file, fileName, this.store.getValue('runtime.workingResolution'));
       if (gen !== this.gen) return;
       this.source = src;
@@ -342,6 +436,9 @@ export class App implements AppContext {
       this.projectId = null;
       this.sceneName = stripExtension(fileName) || 'Scene';
       this.events.emit('image', src);
+      // Land in the 2D parallax view at the live Result.
+      this.showView('2d', 'result');
+      this.ui.setWorkspace('layout');
       await this.runAnalysis(gen);
     });
   }
@@ -356,6 +453,7 @@ export class App implements AppContext {
     this.gen++;
     this.pipeline?.cancel();
     window.clearTimeout(this.reconTimer);
+    window.clearTimeout(this.analysisTimer);
     this.analyzing = false;
     this.setBusy(false);
     this.reports.warn('Job cancelled');
@@ -364,18 +462,24 @@ export class App implements AppContext {
   newScene(): void {
     this.gen++;
     this.pipeline?.cancel();
+    window.clearTimeout(this.reconTimer);
+    window.clearTimeout(this.analysisTimer);
     this.analyzing = false;
     this.setBusy(false);
+    this.setPicking(false);
+    closeWallpaperPreview();
     this.source = null;
     this.raw = null;
     this.projectId = null;
     this.sceneName = 'Scene';
     this.events.emit('image', null);
-    void this.applySettingsSilently(cloneSettings(DEFAULT_SETTINGS)).then(() => this.showDemo());
+    void this.applySettingsSilently(withEditorView(DEFAULT_SETTINGS)).then(() => this.showDemo());
   }
 
   resetSettings(): void {
-    this.store.replace(cloneSettings(DEFAULT_SETTINGS));
+    const next = cloneSettings(DEFAULT_SETTINGS);
+    next.view = { ...next.view, mode: this.store.getValue('view.mode'), stage: this.store.getValue('view.stage') };
+    this.store.replace(next);
     this.reports.info('Settings reset to defaults');
   }
 
@@ -383,41 +487,60 @@ export class App implements AppContext {
     this.renderer?.resetView();
   }
 
+  showView(mode?: ViewMode, stage?: StageView): void {
+    if (mode && this.store.getValue('view.mode') !== mode) this.store.set('view.mode', mode);
+    if (stage && this.store.getValue('view.stage') !== stage) this.store.set('view.stage', stage);
+  }
+
   setLayerVisible(layer: LayerId, visible: boolean): void {
-    const s = this.store;
-    const toggleIntensity = (path: 'lighting.keyIntensity' | 'lighting.rimIntensity'): void => {
-      const cur = s.getValue(path);
-      s.checkpoint();
-      if (!visible) {
-        if (cur > 0) this.lastIntensity.set(path, cur);
-        s.set(path, 0);
-      } else if (cur <= 0) {
-        s.set(path, this.lastIntensity.get(path) ?? DEFAULT_SETTINGS.lighting[path === 'lighting.keyIntensity' ? 'keyIntensity' : 'rimIntensity']);
-      }
-    };
     switch (layer) {
-      case 'keyLight':
-        toggleIntensity('lighting.keyIntensity');
-        break;
-      case 'rimLight':
-        toggleIntensity('lighting.rimIntensity');
-        break;
       case 'depth':
       case 'mask': {
-        const mode = layer === 'depth' ? 'depth' : 'mask';
-        if (visible) s.set('view.mode', mode);
-        else if (s.getValue('view.mode') === mode) s.set('view.mode', 'render');
+        if (visible) this.showView('2d', layer);
+        else if (this.store.getValue('view.stage') === layer) this.showView(undefined, 'result');
         break;
       }
       case 'background':
-      case 'foreground': {
+      case 'foreground':
         this.ui.setLayerVisible(layer, visible);
         this.renderer?.setLayerVisibility(layer, visible);
         break;
-      }
       default:
         this.ui.setLayerVisible(layer, visible);
     }
+  }
+
+  // ───────────────────────────────────────────── pick object ─────────────────────────────────────────────
+
+  setPicking(on: boolean): void {
+    if (on) {
+      if (!this.source || !this.renderer) {
+        this.reports.warn('Open an image first, then pick the object in it');
+        return;
+      }
+      if (this.ui.previewOpen) return;
+      this.showView('2d');
+    }
+    if (this.ui.picking === on) return;
+    this.ui.setPicking(on);
+    this.renderer?.setPicking(on);
+    if (on) this.reports.info('Click the object you want as the main object');
+  }
+
+  pickAt(clientX: number, clientY: number): boolean {
+    const p = this.renderer?.imagePointAt(clientX, clientY) ?? null;
+    if (!p) return false;
+    const point: [number, number] = [Number(p[0].toFixed(4)), Number(p[1].toFixed(4))];
+    this.store.checkpoint();
+    this.store.set('mask.click', point);
+    this.setPicking(false);
+    return true;
+  }
+
+  clearPick(): void {
+    if (this.store.getValue('mask.click') === null) return;
+    this.store.checkpoint();
+    this.store.set('mask.click', null);
   }
 
   // ───────────────────────────────────────────── models ─────────────────────────────────────────────
@@ -472,8 +595,10 @@ export class App implements AppContext {
       this.reports.error('That project no longer exists');
       return;
     }
-    const settings = mergeSettings(rec.settings);
-    await this.job('Could not open project', async (gen) => {
+    const settings = withEditorView(loadSettings(rec.settings).settings);
+    this.setPicking(false);
+    closeWallpaperPreview();
+    await this.job('Could not open project', UPLOAD_MSG, async (gen) => {
       await this.applySettingsSilently(settings);
       const src = await pipeline.loadImage(rec.sourceBlob, rec.name, settings.runtime.workingResolution);
       if (gen !== this.gen) return;
@@ -538,7 +663,6 @@ export class App implements AppContext {
       settings: cloneSettings(this.store.get()),
       source: this.source,
       raw: this.raw,
-      scene: this.isDemo ? null : this.scene,
       embedAssets: embed,
     });
     const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
@@ -546,18 +670,40 @@ export class App implements AppContext {
     this.reports.success(`Exported wallpaper config${embed ? ' with embedded assets' : ''}`);
   }
 
+  async exportConfigJson(): Promise<void> {
+    downloadBlob(new Blob([strictConfigJson(this.store.get() as Settings)], { type: 'application/json' }), 'config.json');
+    this.reports.success('Exported config.json (plain JSON, 2.5dwallpp compatible)');
+  }
+
+  /** Accepts a `.pw3d.json` (v1/v2) or a bare 2.5dwallpp `config.json` (nested or flat, comments allowed). */
   async importConfig(file: File): Promise<void> {
-    const parsed = parseConfig(await file.text());
+    const parsed = parseConfig(await file.text(), this.store.get() as Settings);
     if (parsed.newer) this.reports.warn('This config was made by a newer version; unknown settings are ignored');
+    if (parsed.legacy) this.reports.info('Version 1 config: only the settings that still exist were carried over; the image is analysed again');
+    if (parsed.problems.length) {
+      const shown = parsed.problems.slice(0, 4).join('; ');
+      this.reports.warn(`Config problems: ${shown}${parsed.problems.length > 4 ? ` (+${parsed.problems.length - 4} more)` : ''}`);
+    }
+
+    if (parsed.kind === 'config') {
+      // A bare config.json is merged onto the current settings; the store's invalidation re-runs what changed.
+      this.store.checkpoint();
+      this.store.replace(parsed.settings);
+      this.reports.success('Applied config.json');
+      return;
+    }
+
+    const settings = withEditorView(parsed.settings);
     const pipeline = this.getPipeline();
-    await this.applySettingsSilently(parsed.settings);
+    await this.applySettingsSilently(settings);
     this.sceneName = parsed.name;
 
     const { source: srcUrl, mask: maskUrl, depth: depthUrl } = parsed.assets;
     if (srcUrl && pipeline) {
-      await this.job('Could not import config', async (gen) => {
+      this.setPicking(false);
+      await this.job('Could not import config', UPLOAD_MSG, async (gen) => {
         const blob = await dataUrlToBlob(srcUrl);
-        const src = await pipeline.loadImage(blob, parsed.name, parsed.settings.runtime.workingResolution);
+        const src = await pipeline.loadImage(blob, parsed.name, settings.runtime.workingResolution);
         if (gen !== this.gen) return;
         this.source = src;
         this.raw = null;
@@ -572,8 +718,8 @@ export class App implements AppContext {
               height: m.height,
               rawMask: m.data,
               rawDepth: d.data,
-              segmentationModel: parsed.settings.segmentation.enabled ? parsed.settings.segmentation.model : null,
-              depthModel: parsed.settings.depth.model,
+              segmentationModel: settings.mask.use_subject ? settings.mask.mask_model : null,
+              depthModel: settings.depth.model,
               backendUsed: 'cpu',
               timings: { embedded: 0 },
             };
@@ -594,14 +740,23 @@ export class App implements AppContext {
 
   async exportGLB(): Promise<void> {
     if (!this.renderer) throw new Error('Renderer unavailable');
-    this.reports.info('Exporting GLB…');
+    this.reports.info('Preparing .glb…');
     const blob = await this.renderer.exportGLB();
     downloadBlob(blob, `${this.fileBase()}.glb`);
     this.reports.success('Exported GLB');
   }
 
+  async exportHTML(): Promise<void> {
+    if (!this.renderer) throw new Error('Renderer unavailable');
+    this.reports.info('Preparing live wallpaper…');
+    const blob = await this.renderer.exportHTML({ title: this._sceneName });
+    downloadBlob(blob, `${this.fileBase()}.html`);
+    this.reports.success('Exported live wallpaper (.html)');
+  }
+
   async renderImage(width?: number, height?: number): Promise<void> {
     if (!this.renderer) throw new Error('Renderer unavailable');
+    this.reports.info('Rendering PNG…');
     const blob = await this.renderer.screenshot(width, height);
     downloadBlob(blob, `${this.fileBase()}.png`);
     this.reports.success('Rendered image saved');

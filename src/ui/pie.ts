@@ -30,16 +30,17 @@ const DEAD_ZONE = 26;
 export function openPieMenu(ctx: AppContext): void {
   activeClose?.();
   const mode = ctx.store.getValue('view.mode');
-  const set = (m: 'render' | 'depth' | 'mask' | 'wireframe' | 'layers') => () => ctx.store.set('view.mode', m);
+  const stage = ctx.store.getValue('view.stage');
+  const is2d = mode === '2d';
   const slices: Slice[] = [
-    { label: 'Wireframe', icon: 'wireframe', angle: 180, active: mode === 'wireframe', run: set('wireframe') },
-    { label: 'Depth', icon: 'shadedSphere', angle: 0, active: mode === 'depth', run: set('depth') },
-    { label: 'Rendered', icon: 'aperture', angle: 90, active: mode === 'render', run: set('render') },
-    { label: 'Mask', icon: 'mask', angle: 270, active: mode === 'mask', run: set('mask') },
-    { label: 'Layers', icon: 'layers', angle: 135, active: mode === 'layers', run: set('layers') },
-    { label: 'Statistics', icon: 'info', angle: 45, active: ctx.store.getValue('view.showStats'), run: () => ctx.ops.run('view.toggle_stats') },
-    { label: 'Grid', icon: 'grid', angle: 225, active: ctx.store.getValue('view.showGrid'), run: () => ctx.ops.run('view.toggle_grid') },
-    { label: 'Reset View', icon: 'view3d', angle: 315, run: () => ctx.ops.run('view.reset') },
+    { label: '2D Parallax', icon: 'imageEditor', angle: 180, active: is2d, run: () => ctx.showView('2d') },
+    { label: '3D Camera', icon: 'view3d', angle: 0, active: mode === '3d', run: () => ctx.showView('3d') },
+    { label: 'Result', icon: 'aperture', angle: 90, active: is2d && stage === 'result', run: () => ctx.showView('2d', 'result') },
+    { label: 'config.json', icon: 'file', angle: 270, active: mode === 'config', run: () => ctx.showView('config') },
+    { label: 'Mask', icon: 'mask', angle: 135, active: is2d && stage === 'mask', run: () => ctx.showView('2d', 'mask') },
+    { label: 'Object Depth', icon: 'depth', angle: 45, active: is2d && stage === 'objdepth', run: () => ctx.showView('2d', 'objdepth') },
+    { label: 'Whole Depth', icon: 'shadedSphere', angle: 225, active: is2d && stage === 'depth', run: () => ctx.showView('2d', 'depth') },
+    { label: 'Preview Wallpaper', icon: 'fullscreen', angle: 315, run: () => ctx.ops.run('view.preview_wallpaper') },
   ];
 
   const cx = clamp(lastPointer.x, RADIUS + 70, window.innerWidth - RADIUS - 70);

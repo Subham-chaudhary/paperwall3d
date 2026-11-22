@@ -1,7 +1,8 @@
 /** Blender-style splash screen: hero banner, quick actions, recent projects and links. */
 import { APP_NAME, APP_VERSION } from '../core/version';
 import type { AppContext } from './context';
-import { h } from './dom';
+import { PRESETS } from '../core/presets';
+import { h, pickFile } from './dom';
 import { icon, iconSvg, type IconName } from './icons';
 import { userPrefs } from './userprefs';
 import { checkbox } from './widgets/controls';
@@ -120,7 +121,10 @@ export function openSplash(ctx: AppContext): void {
 
   const newBtn = linkRow('file', 'New', 'Start with the demo scene', act(() => ctx.newScene()));
   const openBtn = linkRow('folder', 'Open Image…', 'JPG, PNG or WebP', act(() => ctx.ops.run('file.open_image')));
-  const cfgBtn = linkRow('import', 'Load Wallpaper Config…', '.pw3d.json', act(() => ctx.ops.run('file.import_config')));
+  const presetBtns = PRESETS.map((p) =>
+    linkRow('sparkle', `Open Image as ${p.label}…`, p.desc, act(() => void pickFile('image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp').then((file) => file && ctx.openImage(file, file.name, p.id)))),
+  );
+  const cfgBtn = linkRow('import', 'Load Config…', '.pw3d.json or 2.5dwallpp config.json', act(() => ctx.ops.run('file.import_config')));
 
   const left = h(
     'div',
@@ -128,6 +132,7 @@ export function openSplash(ctx: AppContext): void {
     h('div', { class: 'pw-splash-h', text: 'New File' }),
     newBtn,
     openBtn,
+    ...presetBtns,
     cfgBtn,
     h('div', { class: 'pw-splash-h', text: 'Recent Projects' }),
     recentList,
@@ -137,8 +142,8 @@ export function openSplash(ctx: AppContext): void {
     { class: 'pw-splash-col' },
     h('div', { class: 'pw-splash-h', text: 'Links' }),
     linkRow('shield', 'Privacy', 'All processing happens on your device', act(() => ctx.ops.run('window.about'))),
-    linkRow('sparkle', "What's New", `PaperWall3D ${APP_VERSION}: Blender-style interface, live parallax, GLB export`, act(() => ctx.ops.run('window.about'))),
-    linkRow('keyboard', 'Shortcuts', 'Press F3 to search every operator, Z for the view pie', act(() => ctx.ops.run('search.operators'))),
+    linkRow('sparkle', "What's New", `PaperWall3D ${APP_VERSION}: 2D parallax, 3D camera, config.json, wallpaper preview`, act(() => ctx.ops.run('window.about'))),
+    linkRow('keyboard', 'Shortcuts', 'F3 searches every operator, Z opens the view pie, P picks the object', act(() => ctx.ops.run('search.operators'))),
     linkRow('gear', 'Preferences', 'Startup, export and storage options', act(() => ctx.ops.run('window.preferences'))),
   );
 
