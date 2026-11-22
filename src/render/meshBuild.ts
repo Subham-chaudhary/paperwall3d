@@ -13,6 +13,7 @@
  * tear and (subject scope) relief.
  */
 import type { LayerScope, PreparedScene } from '../core/types';
+import { colorSize } from './layout';
 
 export interface MeshParams {
   segs: number;
@@ -128,7 +129,8 @@ export class LayerGrids {
 
   constructor(scene: PreparedScene, segs: number) {
     this.segs = segs;
-    this.aspect = scene.width / scene.height;
+    const cs = colorSize(scene);
+    this.aspect = cs.w / cs.h; // the colour layers set the picture's aspect; the maps are sampled by UV
     const { sx, sy } = gridSize(segs, this.aspect);
     this.sx = sx;
     this.sy = sy;

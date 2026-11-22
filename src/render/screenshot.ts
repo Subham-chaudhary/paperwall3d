@@ -12,26 +12,25 @@ export interface ScreenshotOptions {
   view: ParallaxView;
   /** Frame to render; `vw`/`vh`/`fit`/`steps` are overridden (stills always march the full 48 steps). */
   frame: ParallaxFrame;
-  /** Source image aspect (width / height) for defaulting the output size. */
-  imageAspect: number;
+  /** Colour layer size (the output resolution): the default still size and the aspect. */
+  colorWidth: number;
+  colorHeight: number;
   width?: number;
   height?: number;
 }
 
-const DEFAULT_LONG_EDGE = 1920;
-
-export function resolveScreenshotSize(imageAspect: number, w?: number, h?: number): { w: number; h: number } {
+/** Still size: w/h when given (a missing side follows the colour aspect), else exactly the colour layers' size. */
+export function resolveScreenshotSize(colorW: number, colorH: number, w?: number, h?: number): { w: number; h: number } {
+  const aspect = colorW / colorH;
   if (w && h) return { w: Math.round(w), h: Math.round(h) };
-  if (w) return { w: Math.round(w), h: Math.max(1, Math.round(w / imageAspect)) };
-  if (h) return { w: Math.max(1, Math.round(h * imageAspect)), h: Math.round(h) };
-  return imageAspect >= 1
-    ? { w: DEFAULT_LONG_EDGE, h: Math.max(1, Math.round(DEFAULT_LONG_EDGE / imageAspect)) }
-    : { w: Math.max(1, Math.round(DEFAULT_LONG_EDGE * imageAspect)), h: DEFAULT_LONG_EDGE };
+  if (w) return { w: Math.round(w), h: Math.max(1, Math.round(w / aspect)) };
+  if (h) return { w: Math.max(1, Math.round(h * aspect)), h: Math.round(h) };
+  return { w: colorW, h: colorH };
 }
 
 export async function captureScreenshot(o: ScreenshotOptions): Promise<Blob> {
   const { renderer } = o;
-  let { w, h } = resolveScreenshotSize(o.imageAspect, o.width, o.height);
+  let { w, h } = resolveScreenshotSize(o.colorWidth, o.colorHeight, o.width, o.height);
   const max = Math.min(renderer.capabilities.maxTextureSize, 8192);
   const k = Math.min(1, max / Math.max(w, h));
   w = Math.max(1, Math.floor(w * k));

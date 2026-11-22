@@ -11,9 +11,9 @@
  */
 import * as THREE from 'three';
 import type { PreparedScene, Settings, StageView } from '../core/types';
-import { fitRect, perspectiveDistance, perspectiveFov, tiltCoverScale, type FitMode } from './layout';
+import { colorSize, fitRect, perspectiveDistance, perspectiveFov, tiltCoverScale, type FitMode } from './layout';
 import { PARALLAX_FRAG_COMMON } from './parallaxShader';
-import { depthTexture, grayImage, imageDataTexture } from './textures';
+import { depthTexture, grayImage, imageDataTexture, type ColorTextureCache } from './textures';
 
 const DEG = Math.PI / 180;
 
@@ -64,11 +64,13 @@ export class ParallaxView {
   private readonly geometry = new THREE.PlaneGeometry(1, 1);
 
   private data: PreparedScene | null = null;
-  private colors = new Map<ColorKey, THREE.Texture>();
   private depths = new Map<DepthKey, THREE.Texture>();
   private stages = new Map<StageView, THREE.Texture>();
 
-  constructor(private readonly maxAnisotropy: number) {
+  constructor(
+    private readonly maxAnisotropy: number,
+    private readonly colorCache: ColorTextureCache,
+  ) {
     this.bgMesh = new THREE.Mesh(this.geometry, this.layerMaterial(false));
     this.fgMesh = new THREE.Mesh(this.geometry, this.layerMaterial(true));
     this.flatMat = new THREE.ShaderMaterial({
@@ -110,7 +112,8 @@ export class ParallaxView {
 
     if (flat) {
       // Static aid: untilted, unshifted, contain-fitted. Picking shows the source; stage overlays show their map.
-      const rect = fitRect(vw, vh, sc.width, sc.height, 'contain');
+      const cs = colorSize(sc);
+      const rect = fitRect(vw, vh, cs.w, cs.h, 'contain');
       this.bgMesh.visible = this.fgMesh.visible = false;
       this.flatMesh.visible = true;
       this.flatMesh.scale.set(rect.w, rect.h, 1);
@@ -122,10 +125,12 @@ export class ParallaxView {
 
     const P = f.settings.parallax;
     const L = f.settings.layers;
+    // Fit/aspect follow the colour layers; the lighting gradient steps in MAP texels (uTexel).
+    const cs = colorSize(sc);
     const iw = sc.width;
     const ih = sc.height;
 
-    const rect = fitRect(vw, vh, iw, ih, f.fit);
+    const rect = fitRect(vw, vh, cs.w, cs.h, f.fit);
     const rx = f.cur.y * P.tilt * DEG;
     const ry = f.cur.x * P.tilt * DEG;
     // A tilted cover-fit picture would show its edges: grow it just enough (wallpaper only).
@@ -133,7 +138,7 @@ export class ParallaxView {
 
     const dir = P.inverse ? 1 : -1;
     const shiftX = f.cur.x * P.strength * dir;
-    const shiftY = f.cur.y * P.strength * dir * (iw / ih);
+    const shiftY = f.cur.y * P.strength * dir * (cs.w / cs.h);
     const zoom = 1 + P.strength * 1.6;
     const ldx = f.cur.x * 0.8;
     const ldy = f.cur.y * 0.8;
@@ -242,13 +247,8 @@ export class ParallaxView {
   }
 
   private color(key: ColorKey): THREE.Texture {
-    let t = this.colors.get(key);
-    if (!t) {
-      const sc = this.data!;
-      t = imageDataTexture(key === 'source' ? sc.source : key === 'bg' ? sc.bgColor : sc.fg, this.maxAnisotropy, false);
-      this.colors.set(key, t);
-    }
-    return t;
+    const sc = this.data!;
+    return this.colorCache.get(key === 'source' ? sc.source : key === 'bg' ? sc.bgColor : sc.fg, false);
   }
 
   private depth(key: DepthKey): THREE.Texture {
@@ -279,7 +279,7 @@ export class ParallaxView {
   }
 
   private disposeTextures(): void {
-    for (const m of [this.colors, this.depths, this.stages]) {
+    for (const m of [this.depths, this.stages]) {
       for (const t of m.values()) t.dispose();
       m.clear();
     }

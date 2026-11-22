@@ -19,7 +19,8 @@ import {
   type LayerMesh,
   type MeshParams,
 } from './meshBuild';
-import { grayImage, imageDataTexture } from './textures';
+import { colorSize } from './layout';
+import { grayImage, imageDataTexture, type ColorTextureCache } from './textures';
 
 const FOV = 40;
 const WIRE_OBJECT = '#ff3c9e';
@@ -75,7 +76,10 @@ export class OrbitView {
   private element: HTMLElement | null = null;
   private viewAspect = 1;
 
-  constructor(private readonly maxAnisotropy: number) {
+  constructor(
+    private readonly maxAnisotropy: number,
+    private readonly colorCache: ColorTextureCache,
+  ) {
     this.scene.add(this.grid, this.root);
     this.controls = new OrbitControls(this.camera);
     const c = this.controls;
@@ -110,7 +114,8 @@ export class OrbitView {
 
   /** Back to the front view fitting the whole picture. */
   resetCamera(): void {
-    const aspect = this.data ? this.data.width / this.data.height : 1.6;
+    const cs = this.data ? colorSize(this.data) : null;
+    const aspect = cs ? cs.w / cs.h : 1.6;
     const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
     const dist = 1.15 * Math.max(0.5 / t, aspect / 2 / (t * Math.max(this.viewAspect, 0.1)));
     this.camera.position.set(0, 0, dist);
@@ -183,10 +188,10 @@ export class OrbitView {
     const single = !sc.hasForeground;
     const isFg = kind === 'fg';
     const colorImg = isFg ? sc.fg : single ? sc.source : sc.bgColor;
-    const map = imageDataTexture(colorImg, this.maxAnisotropy, true);
-    this.textures.push(map);
+    // Colour textures are shared through the cache (re-used while the ImageData instances stay the same).
+    const map = isFg && single ? null : this.colorCache.get(colorImg, true);
     const shared = { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 } as const;
-    const textured = new THREE.MeshBasicMaterial({ ...shared, map, alphaTest: isFg ? 0.5 : 0 });
+    const textured = new THREE.MeshBasicMaterial({ ...shared, map: map ?? undefined, alphaTest: isFg ? 0.5 : 0 });
     const depth = new THREE.MeshBasicMaterial({ ...shared, vertexColors: true });
     if (isFg) {
       const alphaMap = imageDataTexture(grayImage(sc.mask, sc.width, sc.height), this.maxAnisotropy, false);
@@ -278,7 +283,8 @@ export class OrbitView {
   /** Object size scales the object mesh about the object centre (relief and depth stay as they are). */
   private placeObject(s: number, sc: PreparedScene): void {
     if (!this.fg) return;
-    const aspect = sc.width / sc.height;
+    const cs = colorSize(sc);
+    const aspect = cs.w / cs.h;
     const [cx, cy] = sc.center;
     this.fg.group.scale.set(s, s, 1);
     this.fg.group.position.set((cx - 0.5) * aspect * (1 - s), (0.5 - cy) * (1 - s), 0);

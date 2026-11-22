@@ -7,9 +7,12 @@ import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import type { PreparedScene, Settings } from '../core/types';
 import { bakeObjectSize, buildBackground, buildObject, LayerGrids, type LayerMesh } from './meshBuild';
-import { imageDataTexture } from './textures';
+import { colorSize } from './layout';
+import { fitImageData, imageDataTexture } from './textures';
 
 const FOV = 40;
+/** glTF viewers rarely take more; the exporter resamples (HD layers are at most 3840 px, so normally nothing changes). */
+const MAX_GLB_TEXTURE = 4096;
 
 export interface ExportOptions {
   showBackground: boolean;
@@ -43,7 +46,7 @@ export async function exportSceneToGLB(scene: PreparedScene, settings: Settings,
 
   const add = (name: string, data: LayerMesh, img: ImageData, cutout: boolean): void => {
     const geometry = geometryOf(data);
-    const map = imageDataTexture(img, 1, true);
+    const map = imageDataTexture(fitImageData(img, MAX_GLB_TEXTURE), 1, true);
     map.generateMipmaps = false;
     map.userData.mimeType = cutout ? 'image/png' : 'image/jpeg';
     const material = new THREE.MeshBasicMaterial({
@@ -71,7 +74,8 @@ export async function exportSceneToGLB(scene: PreparedScene, settings: Settings,
   }
   if (!root.children.length) throw new Error('Nothing to export: every layer is hidden or empty');
 
-  const aspect = scene.width / scene.height;
+  const cs = colorSize(scene);
+  const aspect = cs.w / cs.h;
   const t = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
   const cam = new THREE.PerspectiveCamera(FOV, aspect, 0.01, 100);
   cam.name = 'Camera';
@@ -80,7 +84,7 @@ export async function exportSceneToGLB(scene: PreparedScene, settings: Settings,
   root.add(cam);
 
   try {
-    const buffer = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: false });
+    const buffer = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: false, maxTextureSize: MAX_GLB_TEXTURE });
     return new Blob([buffer as ArrayBuffer], { type: 'model/gltf-binary' });
   } finally {
     for (const d of disposables) d.dispose();

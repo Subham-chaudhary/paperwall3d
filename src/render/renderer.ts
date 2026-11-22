@@ -11,11 +11,12 @@ import type { IRenderer, PreparedScene, Presentation, RenderStats, Settings } fr
 import { exportSceneToGLB } from './exporter';
 import { createWebGL2Context } from './glContext';
 import { buildHtmlWallpaper } from './htmlWallpaper';
-import { fitRect, type FitMode } from './layout';
+import { colorSize, fitRect, type FitMode } from './layout';
 import { OrbitView } from './orbitView';
 import { marchSteps } from './parallaxShader';
 import { ParallaxView, type ParallaxFrame } from './parallaxView';
 import { captureScreenshot } from './screenshot';
+import { ColorTextureCache } from './textures';
 
 const FPS_TIME_CONSTANT = 0.5; // seconds
 const CURSOR_EPS = 1e-4;
@@ -27,6 +28,7 @@ export class PaperRenderer implements IRenderer {
 
   private readonly container: HTMLElement;
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly colorCache: ColorTextureCache;
   private readonly parallax: ParallaxView;
   private readonly orbit: OrbitView;
   private readonly resizeObserver: ResizeObserver;
@@ -36,6 +38,7 @@ export class PaperRenderer implements IRenderer {
   private readonly layerVisible = { background: true, foreground: true };
   private presentation: Presentation = 'editor';
   private picking = false;
+  private lastMode: 'config' | '2d' | '3d' | null = null;
 
   /** Pointer target and smoothed cursor, -1..1, y down (2.5dwallpp convention). */
   private readonly mouse = { x: 0, y: 0 };
@@ -83,8 +86,9 @@ export class PaperRenderer implements IRenderer {
     }
 
     const aniso = this.renderer.capabilities.getMaxAnisotropy();
-    this.parallax = new ParallaxView(aniso);
-    this.orbit = new OrbitView(aniso);
+    this.colorCache = new ColorTextureCache(aniso, this.renderer.capabilities.maxTextureSize);
+    this.parallax = new ParallaxView(aniso, this.colorCache);
+    this.orbit = new OrbitView(aniso, this.colorCache);
 
     this.canvas.addEventListener('webglcontextlost', this.onContextLost);
     this.canvas.addEventListener('webglcontextrestored', this.onContextRestored);
@@ -103,6 +107,8 @@ export class PaperRenderer implements IRenderer {
   setScene(scene: PreparedScene, settings: Settings): void {
     this.settings = cloneSettings(settings);
     this.scene = scene;
+    // Colour layers keep their GPU textures when the very same ImageData objects come back (only maps changed).
+    this.colorCache.retain([scene.source, scene.bgColor, scene.fg]);
     this.parallax.setScene(scene);
     this.orbit.setScene(scene);
     this.applySettings();
@@ -148,7 +154,8 @@ export class PaperRenderer implements IRenderer {
     if (!this.scene || this.settings.view.mode !== '2d') return null;
     const box = this.canvas.getBoundingClientRect();
     if (box.width < 1 || box.height < 1) return null;
-    const rect = fitRect(box.width, box.height, this.scene.width, this.scene.height, this.fit());
+    const cs = colorSize(this.scene);
+    const rect = fitRect(box.width, box.height, cs.w, cs.h, this.fit());
     const u = (clientX - box.left - rect.x) / rect.w;
     const v = (clientY - box.top - rect.y) / rect.h;
     return u < 0 || u > 1 || v < 0 || v > 1 ? null : [u, v];
@@ -173,16 +180,20 @@ export class PaperRenderer implements IRenderer {
 
   async screenshot(width?: number, height?: number): Promise<Blob> {
     if (!this.scene) throw new Error('No scene loaded');
+    const cs = colorSize(this.scene);
     try {
       return await captureScreenshot({
         renderer: this.renderer,
         view: this.parallax,
         frame: this.frameState(),
-        imageAspect: this.scene.width / this.scene.height,
+        colorWidth: cs.w,
+        colorHeight: cs.h,
         width,
         height,
       });
     } finally {
+      // A still in the 3D view borrowed the raw-colour textures of the 2D shader: give that GPU memory back.
+      if (this.settings.view.mode === '3d') this.colorCache.release(false);
       this.dirty = true;
     }
   }
@@ -197,6 +208,7 @@ export class PaperRenderer implements IRenderer {
     this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.orbit.dispose();
     this.parallax.dispose();
+    this.colorCache.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.canvas.remove();
@@ -249,6 +261,12 @@ export class PaperRenderer implements IRenderer {
   private applySettings(): void {
     const s = this.settings;
     this.renderer.setClearColor(new THREE.Color(s.view.background), 1);
+    if (s.view.mode !== this.lastMode) {
+      // 2D samples raw bytes, 3D decodes sRGB: keep only the active mode's textures on the GPU (they re-upload on demand).
+      if (s.view.mode === '3d') this.colorCache.release(false);
+      else if (this.lastMode === '3d') this.colorCache.release(true);
+      this.lastMode = s.view.mode;
+    }
     if (s.view.mode === '3d') {
       this.orbit.setActive(this.canvas);
       this.orbit.sync({

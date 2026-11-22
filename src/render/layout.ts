@@ -62,3 +62,8 @@ export function tiltCoverScale(vw: number, vh: number, w: number, h: number, rx:
   }
   return s;
 }
+
+/** Size of the colour layers of a scene (the output resolution); the maps may be smaller but share the aspect. */
+export function colorSize(sc: { width: number; height: number; colorWidth?: number; colorHeight?: number }): { w: number; h: number } {
+  return { w: sc.colorWidth || sc.width, h: sc.colorHeight || sc.height };
+}

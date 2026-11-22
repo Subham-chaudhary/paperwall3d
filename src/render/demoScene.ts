@@ -281,6 +281,8 @@ export function createDemoScene(): PreparedScene {
   return {
     width: W,
     height: H,
+    colorWidth: W,
+    colorHeight: H,
     source,
     mask,
     depth,
