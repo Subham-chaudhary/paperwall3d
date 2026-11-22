@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-11-22
+
+### Changed
+- New logo (three stacked photo cards) used for the favicon, top bar, splash and About dialog.
+- The UI is recoloured from the logo palette: indigo-tinted neutrals, electric-blue selection, hot-pink active states, a lime version label, and a gradient progress bar.
+- The splash hero and the procedural demo scene are redrawn in the logo's style.
+- Wireframe, mask and grid view colours now match the new palette.
+- The README has the logo, badges and a brand palette section.
+
+### Fixed
+- With no image loaded, the image strip's empty-state hint no longer overlaps the placeholder tiles.
+
 ## [1.1.0] - 2026-11-21
 
 ### Added
